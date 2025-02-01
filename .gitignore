@@ -1,7 +1,30 @@
-secrets.h
-custom-settings.h
-build/
-.directory
-.DS_Store
-.History/
+# Build outputs
+*.hex
+*.bin
+*.elf
+*.o
+
+# IDE specific
+.history/
 .vscode/
+.DS_Store
+.idea/
+*.swp
+*.swo
+
+# Debug logs
+debug/
+*.log
+
+# Temporary files
+*~
+.DS_Store
+
+# Project specific
+CAN messages/Traces/*
+!CAN messages/Traces/*.txt
+Firmware changes/*
+!Firmware changes/*.txt
+
+# Private configuration
+private_config.h
