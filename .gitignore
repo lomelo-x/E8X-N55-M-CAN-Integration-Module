@@ -28,3 +28,13 @@ Firmware changes/*
 
 # Private configuration
 private_config.h
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Arduino specific
+build/
+.build/
+*.eep
