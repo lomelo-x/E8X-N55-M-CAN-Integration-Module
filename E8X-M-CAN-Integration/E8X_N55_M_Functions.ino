@@ -15,7 +15,11 @@ void setup() {
     Serial.begin(115200);
     
     // Initialize CAN communication
-    initialize_can();
+    KCAN.begin();
+    KCAN.setBaudRate(100000);  // K-CAN runs at 100kbps
+    
+    PTCAN.begin();
+    PTCAN.setBaudRate(500000); // PT-CAN runs at 500kbps
     
     // Initialize M functions
     initialize_m_functions();
@@ -66,8 +70,12 @@ void loop() {
         handle_launch_control(current_rpm, clutch_pressed, vehicle_moving);
     }
     
-    // Add any additional processing here
-    delay(1); // Small delay to prevent overwhelming the CAN bus
+    // Process any PT-CAN messages if needed
+    if (PTCAN.read(pt_msg)) {
+        // Add any PT-CAN message handling here if needed
+    }
+    
+    delay(1); // Small delay to prevent flooding
 }
 
 void process_engine_diagnostics(void) {

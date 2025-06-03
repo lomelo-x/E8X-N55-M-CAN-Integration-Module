@@ -15,6 +15,8 @@ static bool dsc_mode_change_disable = false;
 static uint8_t dsc_program_status = 0;  // 0 = ON, 1 = OFF, 4 = DTC/MDM
 static uint8_t current_key_number = 0;  // 0-3 for different key profiles
 static bool launch_control_active = false;
+static uint8_t dsc_mode = 0;  // 0 = ON, 1 = OFF
+static uint8_t current_map = 0;  // 0 = Stock, 1 = Map1, 2 = Map2, etc.
 
 // Per-key MDrive settings
 struct MDriveSettings {
@@ -42,6 +44,7 @@ CAN_message_t dsc_on_buf;
 CAN_message_t dsc_off_buf;
 CAN_message_t dsc_mdm_dtc_buf;
 CAN_message_t sport_display_data_buf;
+CAN_message_t mhd_map_buf;
 
 void initialize_m_functions(void) {
     // Initialize shift light patterns
@@ -267,4 +270,13 @@ void process_engine_diagnostics(void) {
         uint16_t rpm = ((k_msg.buf[2] << 8) | k_msg.buf[3]) * 4;
         update_shift_lights(rpm);
     }
+}
+
+void set_mhd_map(uint8_t map) {
+    // MHD map switching uses diagnostic messages
+    // Format: 0x6F1 with specific data for each map
+    uint8_t mhd_data[] = {0x12, 0x03, 0x30, map, 0x00, 0x00, 0x00, 0x00};
+    mhd_map_buf = make_msg_buf(CAN_ID_MHD_MAP, 8, mhd_data);
+    kcan_write_msg(mhd_map_buf);
+    current_map = map;
 } 
