@@ -1,4 +1,5 @@
 #include "m_functions.h"
+#include <EEPROM.h>
 
 // Global variables
 static bool shiftlights_active = false;
@@ -10,6 +11,17 @@ static uint8_t last_var_rpm_can = 0;
 static bool m_button_pressed = false;
 static uint8_t m_button_hold_counter = 0;
 static bool mdrive_active = false;
+static bool dsc_mode_change_disable = false;
+static uint8_t dsc_program_status = 0;  // 0 = ON, 1 = OFF, 4 = DTC/MDM
+static uint8_t current_key_number = 0;  // 0-3 for different key profiles
+static bool launch_control_active = false;
+
+// Per-key MDrive settings
+struct MDriveSettings {
+    uint8_t dsc_mode;    // 0xB = ON, 7 = OFF, 0x13 = MDM/DTC
+    bool launch_control_enabled;
+};
+static MDriveSettings mdrive_settings[4];  // Settings for 4 different keys
 
 // Message buffers
 CAN_message_t shiftlights_start_buf;
@@ -26,6 +38,10 @@ CAN_message_t oil_needle_min_buf;
 CAN_message_t mdrive_status_on_buf;
 CAN_message_t mdrive_status_off_buf;
 CAN_message_t mdrive_settings_buf;
+CAN_message_t dsc_on_buf;
+CAN_message_t dsc_off_buf;
+CAN_message_t dsc_mdm_dtc_buf;
+CAN_message_t sport_display_data_buf;
 
 void initialize_m_functions(void) {
     // Initialize shift light patterns
@@ -64,10 +80,21 @@ void initialize_m_functions(void) {
     mdrive_status_on_buf = make_msg_buf(CAN_ID_MDRIVE_STATUS, 6, mdrive_on);
     mdrive_status_off_buf = make_msg_buf(CAN_ID_MDRIVE_STATUS, 6, mdrive_off);
     mdrive_settings_buf = make_msg_buf(CAN_ID_MDRIVE_SETTINGS, 8, mdrive_settings);
+
+    // Initialize DSC control messages
+    uint8_t dsc_on[] = {0xCF, 0xE3};
+    uint8_t dsc_off[] = {0xCF, 0xE7};
+    uint8_t dsc_mdm[] = {0xCF, 0xF3};
+
+    dsc_on_buf = make_msg_buf(CAN_ID_DSC_STATUS, 2, dsc_on);
+    dsc_off_buf = make_msg_buf(CAN_ID_DSC_STATUS, 2, dsc_off);
+    dsc_mdm_dtc_buf = make_msg_buf(CAN_ID_DSC_STATUS, 2, dsc_mdm);
+
+    // Load saved settings
+    load_mdrive_settings();
 }
 
 void handle_m_button(void) {
-    // Read M button state from CAN message
     if (k_msg.id == CAN_ID_M_BUTTON) {
         if (k_msg.buf[0] == M_BUTTON_PRESSED && !m_button_pressed) {
             m_button_pressed = true;
@@ -94,8 +121,36 @@ void toggle_mdrive_status(void) {
     mdrive_active = !mdrive_active;
     if (mdrive_active) {
         kcan_write_msg(mdrive_status_on_buf);
+        // Apply saved DSC mode for current key
+        if (mdrive_settings[current_key_number].dsc_mode != dsc_program_status) {
+            toggle_dsc_mode();
+        }
     } else {
         kcan_write_msg(mdrive_status_off_buf);
+        // Return to DSC ON if it was changed
+        if (dsc_program_status != 0) {
+            toggle_dsc_mode();
+        }
+    }
+}
+
+void toggle_dsc_mode(void) {
+    if (!dsc_mode_change_disable) {
+        uint8_t target_mode = mdrive_settings[current_key_number].dsc_mode;
+        switch(target_mode) {
+            case 0xB:  // DSC ON
+                kcan_write_msg(dsc_on_buf);
+                dsc_program_status = 0;
+                break;
+            case 7:   // DSC OFF
+                kcan_write_msg(dsc_off_buf);
+                dsc_program_status = 1;
+                break;
+            case 0x13: // MDM/DTC
+                kcan_write_msg(dsc_mdm_dtc_buf);
+                dsc_program_status = 4;
+                break;
+        }
     }
 }
 
@@ -113,22 +168,18 @@ void update_shift_lights(uint16_t rpm) {
     }
 
     if (rpm >= START_UPSHIFT_WARN_RPM && rpm <= MID_UPSHIFT_WARN_RPM) {
-        // First yellow segment
         kcan_write_msg(shiftlights_start_buf);
         shiftlights_active = true;
     }
     else if (rpm >= MID_UPSHIFT_WARN_RPM && rpm <= MAX_UPSHIFT_WARN_RPM) {
-        // Buildup yellow to red
         kcan_write_msg(shiftlights_mid_buildup_buf);
         shiftlights_active = true;
     }
     else if (rpm >= MAX_UPSHIFT_WARN_RPM) {
-        // Flash red
         kcan_write_msg(shiftlights_max_flash_buf);
         shiftlights_active = true;
     }
     else if (shiftlights_active) {
-        // Turn off if RPM drops
         if (ignore_shiftlights_off_counter == 0) {
             kcan_write_msg(shiftlights_off_buf);
             shiftlights_active = false;
@@ -136,6 +187,53 @@ void update_shift_lights(uint16_t rpm) {
         else {
             ignore_shiftlights_off_counter--;
         }
+    }
+}
+
+void handle_launch_control(uint16_t rpm, bool clutch_pressed, bool vehicle_moving) {
+    if (!mdrive_settings[current_key_number].launch_control_enabled) {
+        return;
+    }
+
+    if (LC_RPM_MIN <= rpm && rpm <= LC_RPM_MAX) {
+        if (clutch_pressed && !vehicle_moving) {
+            launch_control_active = true;
+            // Flash shift lights
+            kcan_write_msg(shiftlights_max_flash_buf);
+            // Enable MDM/DTC if not already in that mode
+            if (dsc_program_status != 4) {
+                uint8_t saved_mode = mdrive_settings[current_key_number].dsc_mode;
+                mdrive_settings[current_key_number].dsc_mode = 0x13;  // MDM/DTC
+                toggle_dsc_mode();
+                mdrive_settings[current_key_number].dsc_mode = saved_mode;
+            }
+        }
+    } else if (launch_control_active) {
+        launch_control_active = false;
+        // Return to normal shift light operation
+        if (rpm < START_UPSHIFT_WARN_RPM) {
+            kcan_write_msg(shiftlights_off_buf);
+        }
+        // Return to previous DSC mode if we changed it
+        if (dsc_program_status != mdrive_settings[current_key_number].dsc_mode) {
+            toggle_dsc_mode();
+        }
+    }
+}
+
+void save_mdrive_settings(void) {
+    // Save settings to EEPROM
+    for (int i = 0; i < 4; i++) {
+        EEPROM.update(i * 2, mdrive_settings[i].dsc_mode);
+        EEPROM.update(i * 2 + 1, mdrive_settings[i].launch_control_enabled);
+    }
+}
+
+void load_mdrive_settings(void) {
+    // Load settings from EEPROM
+    for (int i = 0; i < 4; i++) {
+        mdrive_settings[i].dsc_mode = EEPROM.read(i * 2);
+        mdrive_settings[i].launch_control_enabled = EEPROM.read(i * 2 + 1);
     }
 }
 
