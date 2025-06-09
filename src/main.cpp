@@ -82,15 +82,39 @@ void initializeGaugeMessages() {
 
 bool initializeKCAN() {
     KCAN.setClock(FLEXCAN_CLOCK::CLK_24MHz);
-    KCAN.begin();
-    delay(100);
     
-    KCAN.setBaudRate(100000);
+    // Set explicit pins for K-CAN
+    KCAN.setTX(22); // CAN1 TX pin
+    KCAN.setRX(23); // CAN1 RX pin
+    
+    // More robust initialization
+    KCAN.begin();
+    delay(250); // Give more time for initialization
+    
+    // Set filters to accept all messages initially
+    KCAN.setMBFilter(REJECT_ALL);
+    KCAN.enableMBInterrupts();
+    
+    // Configure for 100kbps
+    KCAN.setBaudRate(100000, FLEXCAN_RXTX::LISTEN_ONLY);
     KCAN.setMaxMB(16);
     KCAN.enableFIFO();
     KCAN.enableFIFOInterrupt();
     
-    // Send test message
+    delay(100); // Wait for settings to take effect
+    
+    // Try to read the bus first before sending
+    CAN_message_t msg;
+    uint32_t timeout = millis() + 1000; // 1 second timeout
+    while (millis() < timeout) {
+        if (KCAN.read(msg)) {
+            Serial.println("K-CAN: Detected bus activity");
+            return true;
+        }
+        delay(1);
+    }
+    
+    // If no messages received, try sending a test message
     CAN_message_t test_msg;
     test_msg.id = 0x100;
     test_msg.len = 8;
