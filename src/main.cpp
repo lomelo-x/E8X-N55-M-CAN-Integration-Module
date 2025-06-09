@@ -201,119 +201,66 @@ bool initializePTCAN() {
 }
 
 void setup() {
+    // Initialize LED
     pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(100);
+    digitalWrite(LED_BUILTIN, LOW);
     
-    // Initial LED flash
-    for(int i = 0; i < 3; i++) {
-        digitalWrite(LED_BUILTIN, HIGH);
-        delay(100);
-        digitalWrite(LED_BUILTIN, LOW);
-        delay(100);
-    }
-    
+    // Start Serial and wait
     Serial.begin(115200);
-    delay(400);
-    
-    Serial.println("\n\nStarting CAN initialization...");
-    Serial.println("Make sure car ignition is ON");
-    Serial.println("Voltage level: Should be ~5V, currently ~4.7V (may affect reliability)");
     delay(1000);
+    Serial.println("\n\nStarting debug...");
     
-    Serial.println("\nInitializing K-CAN (100kbps)...");
-    if (!initializeKCAN()) {
-        Serial.println("K-CAN initialization failed!");
-        Serial.println("Troubleshooting steps:");
-        Serial.println("1. Check car ignition is ON and waited 30 seconds");
-        Serial.println("2. Verify K-CAN connections:");
-        Serial.println("   - Pin 22 -> TJA1050 TX");
-        Serial.println("   - Pin 23 -> TJA1050 RX");
-        Serial.println("   - Red bundle CANH/CANL correct");
-        Serial.println("3. Check TJA1050 power:");
-        Serial.println("   - VCC voltage (currently 4.7V)");
-        Serial.println("   - Ground connections solid");
-        while(1) {
-            digitalWrite(LED_BUILTIN, HIGH);
-            delay(100);
-            digitalWrite(LED_BUILTIN, LOW);
-            delay(400);
-        }
-    }
-    Serial.println("K-CAN initialized successfully");
+    // Debug blink
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(100);
+    digitalWrite(LED_BUILTIN, LOW);
     
-    Serial.println("\nInitializing PT-CAN (500kbps)...");
-    if (!initializePTCAN()) {
-        Serial.println("PT-CAN initialization failed!");
-        Serial.println("Troubleshooting steps:");
-        Serial.println("1. Check car ignition is ON");
-        Serial.println("2. Verify PT-CAN connections:");
-        Serial.println("   - Pin 0 -> TJA1050 TX");
-        Serial.println("   - Pin 1 -> TJA1050 RX");
-        Serial.println("   - Blue bundle CANH/CANL correct");
-        Serial.println("3. Check TJA1050 power:");
-        Serial.println("   - VCC voltage (currently 4.7V)");
-        Serial.println("   - Ground connections solid");
-        while(1) {
-            digitalWrite(LED_BUILTIN, HIGH);
-            delay(100);
-            digitalWrite(LED_BUILTIN, LOW);
-            delay(100);
-            digitalWrite(LED_BUILTIN, HIGH);
-            delay(100);
-            digitalWrite(LED_BUILTIN, LOW);
-            delay(400);
-        }
-    }
-    Serial.println("PT-CAN initialized successfully");
+    Serial.println("Attempting K-CAN init...");
     
-    initializeGaugeMessages();
+    // Basic K-CAN setup
+    KCAN.setTX(FLEXCAN_PINS::ALT);
+    KCAN.setRX(FLEXCAN_PINS::ALT);
+    KCAN.begin();
     
-    // Success indication
+    // Debug blink
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(100);
+    digitalWrite(LED_BUILTIN, LOW);
+    
+    Serial.println("K-CAN begin() completed");
+    delay(100);
+    
+    // Set K-CAN parameters
+    KCAN.setBaudRate(100000);
+    
+    Serial.println("K-CAN baud rate set");
+    
+    // Final debug blink
     digitalWrite(LED_BUILTIN, HIGH);
     delay(1000);
     digitalWrite(LED_BUILTIN, LOW);
-    Serial.println("\nSetup complete - monitoring CAN buses");
+    
+    Serial.println("Setup complete - entering loop");
 }
 
 void loop() {
     static uint32_t lastBlink = 0;
-    static bool ledState = false;
     
-    // Heartbeat LED
+    // Simple heartbeat
     if (millis() - lastBlink >= 2000) {
-        ledState = !ledState;
-        digitalWrite(LED_BUILTIN, ledState);
+        digitalWrite(LED_BUILTIN, HIGH);
+        delay(100);
+        digitalWrite(LED_BUILTIN, LOW);
         lastBlink = millis();
-        Serial.println("System running - CAN buses active");
+        Serial.println("Heartbeat");
     }
     
-    // Process CAN messages
+    // Basic message check
     CAN_message_t msg;
-    
-    // Check K-CAN messages
-    while (KCAN.read(msg)) {
-        Serial.print("K-CAN MSG ID: 0x");
-        Serial.print(msg.id, HEX);
-        Serial.print(" Data: ");
-        for (int i = 0; i < msg.len; i++) {
-            Serial.print(msg.buf[i], HEX);
-            Serial.print(" ");
-        }
-        Serial.println();
+    if (KCAN.read(msg)) {
+        Serial.print("Message ID: 0x");
+        Serial.println(msg.id, HEX);
     }
-    
-    // Check PT-CAN messages
-    while (PTCAN.read(msg)) {
-        Serial.print("PT-CAN MSG ID: 0x");
-        Serial.print(msg.id, HEX);
-        Serial.print(" Data: ");
-        for (int i = 0; i < msg.len; i++) {
-            Serial.print(msg.buf[i], HEX);
-            Serial.print(" ");
-        }
-        Serial.println();
-    }
-    
-    // Process any pending CAN events
-    KCAN.events();
-    PTCAN.events();
 } 
