@@ -1,15 +1,13 @@
 #include <Arduino.h>
 #include <FlexCAN_T4.h>
-#include "can_core.h"
+#include <imxrt_flexcan.h>
+#include <stdint.h>
 
-// Initialize FlexCAN_T4 objects for K-CAN and PT-CAN
-FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> KCAN;  // CAN1 - K-CAN (100kbps)
-FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> PTCAN; // CAN2 - PT-CAN (500kbps)
+// CAN bus definitions using the correct namespace
+FlexCAN_T4<CAN_DEV_TABLE::CAN1, RX_SIZE_256, TX_SIZE_16> KCAN; // K-CAN (100kbps)
+FlexCAN_T4<CAN_DEV_TABLE::CAN2, RX_SIZE_256, TX_SIZE_16> PTCAN; // PT-CAN (500kbps)
 
-// Global message buffers
-CAN_message_t k_msg, pt_msg;
-
-// Gauge control message buffers
+// Message buffers for gauge control
 CAN_message_t speedo_needle_max_buf, speedo_needle_min_buf;
 CAN_message_t tacho_needle_max_buf, tacho_needle_min_buf;
 CAN_message_t oil_needle_max_buf, oil_needle_min_buf;
@@ -52,99 +50,146 @@ void initializeGaugeMessages() {
     speedo_needle_release_buf.len = tacho_needle_release_buf.len = oil_needle_release_buf.len = 8;
 }
 
-void performGaugeSweep() {
-    Serial.println("Starting gauge sweep animation...");
-    
-    // Sweep to max
-    KCAN.write(speedo_needle_max_buf);
-    delay(100);
-    KCAN.write(tacho_needle_max_buf);
-    delay(100);
-    KCAN.write(oil_needle_max_buf);
-    delay(300);
-
-    // Hold at max
-    delay(500);
-
-    // Sweep to min
-    KCAN.write(tacho_needle_min_buf);
-    delay(100);
-    KCAN.write(speedo_needle_min_buf);
-    delay(100);
-    KCAN.write(oil_needle_min_buf);
-    delay(300);
-
-    // Hold at min
-    delay(500);
-
-    // Release control back to cluster
-    KCAN.write(speedo_needle_release_buf);
-    delay(100);
-    KCAN.write(tacho_needle_release_buf);
-    delay(100);
-    KCAN.write(oil_needle_release_buf);
-    delay(100);
-
-    // Send release commands again to ensure proper operation
-    delay(500);
-    KCAN.write(tacho_needle_release_buf);
-    delay(100);
-    KCAN.write(speedo_needle_release_buf);
-    delay(100);
-    KCAN.write(oil_needle_release_buf);
-    
-    Serial.println("Gauge sweep complete");
-}
-
-// CAN receive callbacks
-void kcan_receive_callback(const CAN_message_t &msg) {
-    k_msg = msg;  // Store in global buffer
-    Serial.print("K-CAN ID: 0x");
-    Serial.println(msg.id, HEX);
-}
-
-void ptcan_receive_callback(const CAN_message_t &msg) {
-    pt_msg = msg;  // Store in global buffer
-    Serial.print("PT-CAN ID: 0x");
-    Serial.println(msg.id, HEX);
+// Function to blink LED in a pattern
+void blinkLED(int times, int onTime, int offTime) {
+    for (int i = 0; i < times; i++) {
+        digitalWrite(13, HIGH);
+        delay(onTime);
+        digitalWrite(13, LOW);
+        if (i < times - 1) delay(offTime); // Don't delay after last blink
+    }
 }
 
 void setup() {
+    // Initialize LED pin for debugging
+    pinMode(13, OUTPUT);
+    
+    // Startup pattern - 3 quick blinks
+    blinkLED(3, 100, 100);
+    delay(500);
+
+    // Initialize Serial and wait for connection
     Serial.begin(115200);
-    while (!Serial && millis() < 3000) ; // Wait for serial or timeout
-    Serial.println("E8X N55 M-CAN Integration Module Starting...");
+    delay(1000); // Give serial time to start
+    Serial.println("Starting CAN initialization...");
 
     // Configure K-CAN
-    KCAN.begin();
-    KCAN.setBaudRate(KCAN_BAUD); // 100kbps
-    KCAN.setTX(22); // K-CAN TX pin
-    KCAN.setRX(23); // K-CAN RX pin
+    Serial.println("Initializing K-CAN...");
+    KCAN.setClock(FLEXCAN_CLOCK::CLK_24MHz);
+    if (!KCAN.begin()) {
+        Serial.println("K-CAN initialization failed!");
+        while (1) {
+            digitalWrite(13, HIGH);
+            delay(100);
+            digitalWrite(13, LOW);
+            delay(100);
+        }
+    }
+    
+    Serial.println("Setting K-CAN baud rate...");
+    KCAN.setBaudRate(100000, FLEXCAN_RXTX::TX); // 100kbps
+    
+    Serial.println("Setting K-CAN pins...");
+    KCAN.setTX(FLEXCAN_PINS::ALT); // K-CAN TX pin (22)
+    KCAN.setRX(FLEXCAN_PINS::ALT); // K-CAN RX pin (23)
+    
+    Serial.println("Enabling K-CAN FIFO...");
     KCAN.enableFIFO();
     KCAN.enableFIFOInterrupt();
-    KCAN.onReceive(kcan_receive_callback);
-    KCAN.mailboxStatus();
-
+    Serial.println("K-CAN initialization complete");
+    
     // Configure PT-CAN
-    PTCAN.begin();
-    PTCAN.setBaudRate(PTCAN_BAUD); // 500kbps
-    PTCAN.setTX(0); // PT-CAN TX pin
-    PTCAN.setRX(1); // PT-CAN RX pin
+    Serial.println("Initializing PT-CAN...");
+    PTCAN.setClock(FLEXCAN_CLOCK::CLK_24MHz);
+    if (!PTCAN.begin()) {
+        Serial.println("PT-CAN initialization failed!");
+        while (1) {
+            digitalWrite(13, HIGH);
+            delay(100);
+            digitalWrite(13, LOW);
+            delay(100);
+        }
+    }
+    
+    Serial.println("Setting PT-CAN baud rate...");
+    PTCAN.setBaudRate(500000, FLEXCAN_RXTX::TX); // 500kbps
+    
+    Serial.println("Setting PT-CAN pins...");
+    PTCAN.setTX(FLEXCAN_PINS::DEF); // PT-CAN TX pin (0)
+    PTCAN.setRX(FLEXCAN_PINS::DEF); // PT-CAN RX pin (1)
+    
+    Serial.println("Enabling PT-CAN FIFO...");
     PTCAN.enableFIFO();
     PTCAN.enableFIFOInterrupt();
-    PTCAN.onReceive(ptcan_receive_callback);
-    PTCAN.mailboxStatus();
-
-    // Initialize gauge messages
-    initializeGaugeMessages();
-
-    Serial.println("CAN buses initialized");
+    Serial.println("PT-CAN initialization complete");
     
-    // Perform initial gauge sweep
-    performGaugeSweep();
+    // Initialize gauge messages
+    Serial.println("Initializing gauge messages...");
+    initializeGaugeMessages();
+    Serial.println("Gauge messages initialized");
+    
+    // Success pattern - one long blink
+    Serial.println("Setup complete - showing success blink");
+    blinkLED(1, 1000, 0);
+    Serial.println("Entering main loop");
 }
 
 void loop() {
-    // Process CAN events
+    static uint32_t lastBlink = 0;
+    static bool ledState = false;
+    static uint32_t lastStatus = 0;
+    
+    // Print status every 5 seconds
+    if (millis() - lastStatus >= 5000) {
+        Serial.println("System running - checking CAN buses");
+        lastStatus = millis();
+    }
+
+    // Blink LED every second to show the program is running
+    if (millis() - lastBlink >= 1000) {
+        ledState = !ledState;
+        digitalWrite(13, ledState);
+        lastBlink = millis();
+    }
+
+    // Check K-CAN messages
+    CAN_message_t msg;
+    if (KCAN.read(msg)) {
+        Serial.println("K-CAN message received!");
+        Serial.print("ID: 0x");
+        Serial.print(msg.id, HEX);
+        Serial.print(" Data: ");
+        for (int i = 0; i < msg.len; i++) {
+            Serial.print(msg.buf[i], HEX);
+            Serial.print(" ");
+        }
+        Serial.println();
+        
+        // Visual indicator on LED for received message
+        digitalWrite(13, HIGH);
+        delay(10);
+        digitalWrite(13, LOW);
+    }
+    
+    // Check PT-CAN messages
+    if (PTCAN.read(msg)) {
+        Serial.println("PT-CAN message received!");
+        Serial.print("ID: 0x");
+        Serial.print(msg.id, HEX);
+        Serial.print(" Data: ");
+        for (int i = 0; i < msg.len; i++) {
+            Serial.print(msg.buf[i], HEX);
+            Serial.print(" ");
+        }
+        Serial.println();
+        
+        // Visual indicator on LED for received message
+        digitalWrite(13, HIGH);
+        delay(10);
+        digitalWrite(13, LOW);
+    }
+    
+    // Process any pending CAN events
     KCAN.events();
     PTCAN.events();
 } 
