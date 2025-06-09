@@ -148,7 +148,6 @@ void setup() {
 void loop() {
     static uint32_t lastBlink = 0;
     static uint32_t messageCount = 0;
-    static uint32_t lastStatus = 0;
     
     // Heartbeat and status
     if (millis() - lastBlink >= 2000) {
@@ -174,8 +173,8 @@ void loop() {
         // Log message details
         char msgLog[100];
         snprintf(msgLog, sizeof(msgLog), 
-                "CAN MSG - ID: 0x%03X, Len: %d, Data: ", 
-                msg.id, msg.len);
+                "CAN MSG - ID: 0x%03lX, Len: %d, Data: ", 
+                (unsigned long)msg.id, msg.len);
         Serial.print(msgLog);
         
         // Print message data bytes
