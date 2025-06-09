@@ -80,139 +80,30 @@ void initializeGaugeMessages() {
     speedo_needle_release_buf.len = tacho_needle_release_buf.len = oil_needle_release_buf.len = 8;
 }
 
-bool initializeKCAN() {
-    Serial.println("K-CAN: Setting up pins and clock...");
-    KCAN.setClock(FLEXCAN_CLOCK::CLK_24MHz);
-    KCAN.setTX(FLEXCAN_PINS::ALT);  // Pin 22
-    KCAN.setRX(FLEXCAN_PINS::ALT);  // Pin 23
-    
-    Serial.println("K-CAN: Starting initialization...");
-    KCAN.begin();
-    delay(250); // Give time for transceiver to stabilize
-    
-    // Start with lower baud rate in listen-only mode
-    Serial.println("K-CAN: Setting initial parameters...");
-    KCAN.setBaudRate(95000, FLEXCAN_RXTX::LISTEN_ONLY);
-    KCAN.setMaxMB(16);
-    KCAN.enableFIFO();
-    KCAN.enableFIFOInterrupt();
-    
-    Serial.println("K-CAN: Listening for bus activity...");
-    
-    // Try to read the bus first
-    CAN_message_t msg;
-    uint32_t timeout = millis() + 2000; // Extended timeout
-    bool activity = false;
-    
-    while (millis() < timeout) {
-        if (KCAN.read(msg)) {
-            Serial.print("K-CAN: Message received! ID: 0x");
-            Serial.print(msg.id, HEX);
-            Serial.print(" Length: ");
-            Serial.println(msg.len);
-            activity = true;
-            break;
-        }
-        delay(1);
-    }
-    
-    if (!activity) {
-        Serial.println("K-CAN: No messages detected in listen mode");
-        
-        // Switch to normal mode and try standard speed
-        Serial.println("K-CAN: Switching to normal mode...");
-        KCAN.setBaudRate(100000);
-        delay(100);
-        
-        // Send test message
-        CAN_message_t test_msg;
-        test_msg.id = 0x100;
-        test_msg.len = 8;
-        memset(test_msg.buf, 0, 8);
-        
-        if (!KCAN.write(test_msg)) {
-            Serial.println("K-CAN: Failed to send test message");
-            return false;
-        }
-        Serial.println("K-CAN: Test message sent successfully");
-    }
-    
-    return true;
-}
-
-bool initializePTCAN() {
-    Serial.println("PT-CAN: Setting up pins and clock...");
-    PTCAN.setClock(FLEXCAN_CLOCK::CLK_24MHz);
-    PTCAN.setTX(FLEXCAN_PINS::DEF);  // Pin 0
-    PTCAN.setRX(FLEXCAN_PINS::DEF);  // Pin 1
-    
-    Serial.println("PT-CAN: Starting initialization...");
-    PTCAN.begin();
-    delay(250); // Give time for transceiver to stabilize
-    
-    // Start with slightly lower baud rate in listen-only mode
-    Serial.println("PT-CAN: Setting initial parameters...");
-    PTCAN.setBaudRate(485000, FLEXCAN_RXTX::LISTEN_ONLY);
-    PTCAN.setMaxMB(16);
-    PTCAN.enableFIFO();
-    PTCAN.enableFIFOInterrupt();
-    
-    Serial.println("PT-CAN: Listening for bus activity...");
-    
-    // Try to read the bus first
-    CAN_message_t msg;
-    uint32_t timeout = millis() + 2000; // Extended timeout
-    bool activity = false;
-    
-    while (millis() < timeout) {
-        if (PTCAN.read(msg)) {
-            Serial.print("PT-CAN: Message received! ID: 0x");
-            Serial.print(msg.id, HEX);
-            Serial.print(" Length: ");
-            Serial.println(msg.len);
-            activity = true;
-            break;
-        }
-        delay(1);
-    }
-    
-    if (!activity) {
-        Serial.println("PT-CAN: No messages detected in listen mode");
-        
-        // Switch to normal mode and try standard speed
-        Serial.println("PT-CAN: Switching to normal mode...");
-        PTCAN.setBaudRate(500000);
-        delay(100);
-        
-        // Send test message
-        CAN_message_t test_msg;
-        test_msg.id = 0x100;
-        test_msg.len = 8;
-        memset(test_msg.buf, 0, 8);
-        
-        if (!PTCAN.write(test_msg)) {
-            Serial.println("PT-CAN: Failed to send test message");
-            return false;
-        }
-        Serial.println("PT-CAN: Test message sent successfully");
-    }
-    
-    return true;
+// Logging helper function
+void log_msg(const char* msg) {
+    Serial.println(msg);
+    Serial.flush(); // Make sure message is sent
+    delay(10);     // Small delay to ensure message is complete
 }
 
 void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
     
     // Power up indication
+    log_msg("\n\n--- STARTUP ---");
+    log_msg("1. LED Test starting...");
     digitalWrite(LED_BUILTIN, HIGH);
     delay(500);
     digitalWrite(LED_BUILTIN, LOW);
     delay(500);
+    log_msg("LED Test complete");
     
     // Start Serial
+    log_msg("2. Initializing Serial...");
     Serial.begin(115200);
     delay(500);
-    Serial.println("\n\nStarting minimal CAN test...");
+    log_msg("Serial initialized at 115200 baud");
     
     // Serial ready indication
     digitalWrite(LED_BUILTIN, HIGH);
@@ -220,37 +111,82 @@ void setup() {
     digitalWrite(LED_BUILTIN, LOW);
     delay(500);
     
-    // Try to initialize CAN
-    Serial.println("Setting up K-CAN...");
+    // CAN Setup
+    log_msg("\n--- CAN SETUP ---");
+    log_msg("3. Setting up K-CAN...");
     
-    KCAN.begin();  // Start with just this
+    // Set clock first
+    log_msg("3.1 Setting CAN clock...");
+    KCAN.setClock(FLEXCAN_CLOCK::CLK_24MHz);
+    log_msg("Clock set to 24MHz");
     
-    Serial.println("K-CAN begin() completed");
+    // Set pins
+    log_msg("3.2 Setting CAN pins...");
+    KCAN.setTX(FLEXCAN_PINS::ALT); // Pin 22
+    KCAN.setRX(FLEXCAN_PINS::ALT); // Pin 23
+    log_msg("Pins set: TX=22, RX=23");
+    
+    // Begin CAN
+    log_msg("3.3 Starting CAN initialization...");
+    KCAN.begin();
+    log_msg("CAN begin() completed");
+    
+    // Try basic configuration
+    log_msg("3.4 Setting basic parameters...");
+    KCAN.setBaudRate(100000);
+    log_msg("Baud rate set to 100kbps");
     
     // CAN ready indication
     digitalWrite(LED_BUILTIN, HIGH);
     delay(500);
     digitalWrite(LED_BUILTIN, LOW);
     
-    Serial.println("Setup complete!");
+    log_msg("\n--- SETUP COMPLETE ---");
+    log_msg("Entering main loop...");
 }
 
 void loop() {
     static uint32_t lastBlink = 0;
+    static uint32_t messageCount = 0;
+    static uint32_t lastStatus = 0;
     
-    // Heartbeat
+    // Heartbeat and status
     if (millis() - lastBlink >= 2000) {
         digitalWrite(LED_BUILTIN, HIGH);
         delay(100);
         digitalWrite(LED_BUILTIN, LOW);
-        Serial.println("Heartbeat");
+        
+        // Print status every 2 seconds
+        char status[100];
+        snprintf(status, sizeof(status), 
+                "Status - Uptime: %lus, Messages received: %lu", 
+                millis()/1000, messageCount);
+        log_msg(status);
+        
         lastBlink = millis();
     }
     
-    // Just try to read messages
+    // Check for CAN messages
     CAN_message_t msg;
     if (KCAN.read(msg)) {
-        Serial.print("Got message, ID: 0x");
-        Serial.println(msg.id, HEX);
+        messageCount++;
+        
+        // Log message details
+        char msgLog[100];
+        snprintf(msgLog, sizeof(msgLog), 
+                "CAN MSG - ID: 0x%03X, Len: %d, Data: ", 
+                msg.id, msg.len);
+        Serial.print(msgLog);
+        
+        // Print message data bytes
+        for (uint8_t i = 0; i < msg.len; i++) {
+            char byteStr[4];
+            snprintf(byteStr, sizeof(byteStr), "%02X ", msg.buf[i]);
+            Serial.print(byteStr);
+        }
+        Serial.println();
     }
+    
+    // Process CAN events
+    KCAN.events();
 } 
