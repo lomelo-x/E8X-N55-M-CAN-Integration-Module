@@ -203,64 +203,41 @@ bool initializePTCAN() {
 void setup() {
     // Initialize LED
     pinMode(LED_BUILTIN, OUTPUT);
-    digitalWrite(LED_BUILTIN, HIGH);
-    delay(100);
-    digitalWrite(LED_BUILTIN, LOW);
     
-    // Start Serial and wait
+    // First blink - Power up
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(500);
+    digitalWrite(LED_BUILTIN, LOW);
+    delay(500);
+    
+    // Start Serial
     Serial.begin(115200);
-    delay(1000);
-    Serial.println("\n\nStarting debug...");
-    
-    // Debug blink
-    digitalWrite(LED_BUILTIN, HIGH);
-    delay(100);
-    digitalWrite(LED_BUILTIN, LOW);
-    
-    Serial.println("Attempting K-CAN init...");
-    
-    // Basic K-CAN setup
-    KCAN.setTX(FLEXCAN_PINS::ALT);
-    KCAN.setRX(FLEXCAN_PINS::ALT);
-    KCAN.begin();
-    
-    // Debug blink
-    digitalWrite(LED_BUILTIN, HIGH);
-    delay(100);
-    digitalWrite(LED_BUILTIN, LOW);
-    
-    Serial.println("K-CAN begin() completed");
     delay(100);
     
-    // Set K-CAN parameters
-    KCAN.setBaudRate(100000);
-    
-    Serial.println("K-CAN baud rate set");
-    
-    // Final debug blink
+    // Second blink - Serial started
     digitalWrite(LED_BUILTIN, HIGH);
-    delay(1000);
+    delay(500);
     digitalWrite(LED_BUILTIN, LOW);
+    delay(500);
     
-    Serial.println("Setup complete - entering loop");
+    Serial.println("\n\nBasic LED test...");
+    
+    // Third blink - Just testing
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(500);
+    digitalWrite(LED_BUILTIN, LOW);
+    delay(500);
 }
 
 void loop() {
     static uint32_t lastBlink = 0;
     
-    // Simple heartbeat
+    // Simple heartbeat every 2 seconds
     if (millis() - lastBlink >= 2000) {
         digitalWrite(LED_BUILTIN, HIGH);
         delay(100);
         digitalWrite(LED_BUILTIN, LOW);
-        lastBlink = millis();
         Serial.println("Heartbeat");
-    }
-    
-    // Basic message check
-    CAN_message_t msg;
-    if (KCAN.read(msg)) {
-        Serial.print("Message ID: 0x");
-        Serial.println(msg.id, HEX);
+        lastBlink = millis();
     }
 } 
