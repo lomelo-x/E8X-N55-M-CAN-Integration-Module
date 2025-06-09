@@ -201,10 +201,9 @@ bool initializePTCAN() {
 }
 
 void setup() {
-    // Initialize LED
     pinMode(LED_BUILTIN, OUTPUT);
     
-    // First blink - Power up
+    // Power up indication
     digitalWrite(LED_BUILTIN, HIGH);
     delay(500);
     digitalWrite(LED_BUILTIN, LOW);
@@ -212,32 +211,46 @@ void setup() {
     
     // Start Serial
     Serial.begin(115200);
-    delay(100);
+    delay(500);
+    Serial.println("\n\nStarting minimal CAN test...");
     
-    // Second blink - Serial started
+    // Serial ready indication
     digitalWrite(LED_BUILTIN, HIGH);
     delay(500);
     digitalWrite(LED_BUILTIN, LOW);
     delay(500);
     
-    Serial.println("\n\nBasic LED test...");
+    // Try to initialize CAN
+    Serial.println("Setting up K-CAN...");
     
-    // Third blink - Just testing
+    KCAN.begin();  // Start with just this
+    
+    Serial.println("K-CAN begin() completed");
+    
+    // CAN ready indication
     digitalWrite(LED_BUILTIN, HIGH);
     delay(500);
     digitalWrite(LED_BUILTIN, LOW);
-    delay(500);
+    
+    Serial.println("Setup complete!");
 }
 
 void loop() {
     static uint32_t lastBlink = 0;
     
-    // Simple heartbeat every 2 seconds
+    // Heartbeat
     if (millis() - lastBlink >= 2000) {
         digitalWrite(LED_BUILTIN, HIGH);
         delay(100);
         digitalWrite(LED_BUILTIN, LOW);
         Serial.println("Heartbeat");
         lastBlink = millis();
+    }
+    
+    // Just try to read messages
+    CAN_message_t msg;
+    if (KCAN.read(msg)) {
+        Serial.print("Got message, ID: 0x");
+        Serial.println(msg.id, HEX);
     }
 } 
