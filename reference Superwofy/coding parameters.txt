@@ -1,0 +1,167 @@
+# NBT EVO ID5/6 23-07, Coded as F082 3R91 or 3R92.
+
+SERVICE_HISTORY                                                         // Disable service history in Vehicle status
+    nicht_aktiv
+IBA                                                                     // Disables owner's manual
+    nicht_aktiv
+SETTINGS_TIME_AUTOMATIC                                                 // Update time with GPS
+    navigation
+MMI_STATISTIK                                                           // Disable some logging
+    nicht_aktiv
+HELLIGKEIT_AMBILIGHT                                                    // Disable interior brightness setting
+    nicht_aktiv
+DEAKTIVIERUNGSMOEGLICHKEIT_AMBILIGHT
+    deaktivierung_bmw
+COLOUR_SWITCH
+    nicht_aktiv
+MACRO_CAM_LEGALDISCLAIMER                                               // Camera disclaimer
+    kein_ld
+COMMUNICATION_PARKMASTER                                                // PDC not working without this.
+    gen2
+SLEEPDELAY_CLAMP30B_MIN                                                 // Sleep after 5 min
+    1E
+SLEEPDELAY_TIMERVALUE                                                   // 180s - reduced to match SLEEPDELAY_CLAMP30B_MIN
+    UNK_PARAM_0
+ECO_CSC_KOMBI
+    nicht_aktiv
+ID5_COLOR_SET
+    nicht_aktiv
+CC_CBS_ETH_SERVICE_VERSION
+    version_1
+M_DIGITAL_TACHO
+    nicht_aktiv
+SETTINGS_INFO_DISPLAY
+    nicht_aktiv
+SETTINGS_INFO_DISPLAY_DATE
+    nicht_aktiv
+KEY_CONF_TAILGATE                                                       // Hides tailgate button menu
+    nicht_aktiv
+M_MENUE                                                                 // M Setup instead of MDrive
+    aktiv
+MDRIVE_CONFIG                                                           // Single MDrive
+    1_menu
+ECO_MODE                                                                // Deactivates ECO mode and Efficient dynamics
+    nicht_aktiv
+HIST_ZOOM
+    nicht_aktiv
+HIST_GAS_CONSUMP
+    nicht_aktiv
+DRIVE_EXP_BRW
+    nicht_aktiv
+STABILITY_CONTROL_POPUP                                                 // DSC mode change in conjunction with 0x3A7
+    aktiv
+CAM_ECU                                                                 // VSW output connected to +21, -24 and shield 23 of A42*1B.
+    wert_1
+TV
+    wert_1
+DIMMUNGSVARIANTE                                                        // old style brightness adjustment
+    alte_dimmung
+DIM_VARIANT
+    old
+BASIS_KOMBI_MMI_LIST
+    aktiv
+GATEWAYTABLE
+    table_7
+PRODUKTLINIE
+    lg
+KOMBI_CIC
+    kombi_low
+CAMERA_SYSTEM
+    trsvc
+X_VIEW                                                                  // xDrive status
+    aktiv
+COMPASS
+    aktiv
+OELSTAND_OENS                                                           // Old CIC-like Oil menu
+    nicht_aktiv
+LANGUAGE_CZECH                                                          // Unsupported languages
+    nicht_aktiv
+LANGUAGE_DANISH
+    nicht_aktiv
+LANGUAGE_NORWEGIAN
+    nicht_aktiv
+LANGUAGE_SLOVENIAN
+    nicht_aktiv
+LANGUAGE_SLOVAKIAN
+    nicht_aktiv
+LANGUAGE_FINNISH
+    nicht_aktiv
+
+
+# CIC
+
+CIC_MDRIVE                                                              // Enables M3 MDrive
+    aktiv
+M_KEY_SETTINGS                                                          // Enables M3 key profile settings
+    aktiv
+EDC_CIC                                                                 // EDC, if retrofitted.
+    aktiv
+DSC_OFF_CIC                                                             // Allows disabling DSC from MDrive menu,
+    aktiv
+MACRO_L6_PARKMENU                                                       // Rear view camera settings
+    aktiv
+
+
+
+# KOMBI
+
+MMI_ENA_SHIFTLIGHTS                                                     // Enable shiftlights
+    aktiv
+DSC_VARIANTE                                                            // Changes DSC symbol when disabled, disables DTC mode kombi screen warning
+    wert_02
+CC_ID_AKTIV_11
+    // Change the second byte from 0xFF to 0x7D (i.e 11111111 to 01111101)
+    // This disables the Ignition On door open CC.
+    // This is required to make the DOOR_VOLUME feature work.
+
+
+
+# IHKA
+
+MSA                                                                     // Activates the Auto-Start-Stop button.
+    aktiv
+
+
+
+# SVT 70: Scaled E92 M3 parameters. Steering angle current change disabled.
+# see "SVT70 parameter value explanations.txt"
+
+BETRIEBSWERTE
+    wert_01
+REGLERPARAMETER
+    wert_01
+WANDLERKENNLINIE
+    00,3B,59,7C,A3,B2,C1,FF,00,00,00,00,00,00,00,00,00,00,00,C8,01,2C,01,A4,02,26,02,58,02,8A,03,5C
+STUETZSTELLEN_V_LW
+    00,00,00,32,00,96,01,2C,01,C2,02,58,03,20,03,E8,04,B0,07,D0,00,00,00,1E,00,78,02,58,04,B0,07,08
+KENNLINIEN1_3_NORM
+    ED,E9,AD,8D,83,7D,72,5E,14,00,ED,E9,AD,8D,83,7D,72,5E,14,00,ED,E9,AD,8D,83,7D,72,5E,14,00,00,00
+KENNLINIEN4_6_NORM
+    ED,E9,AD,8D,83,7D,72,5E,14,00,FF,E9,AD,8D,83,7D,72,5E,14,00,FF,E9,AD,8D,83,7D,72,5E,14,00,00,00
+KENNLINIEN1_3_SPORT
+    ED,E9,9C,80,72,6B,54,30,01,00,ED,E9,9C,80,72,6B,54,30,01,00,ED,E9,9C,80,72,6B,54,30,01,00,00,00
+KENNLINIEN4_6_SPORT
+    ED,E9,9C,80,72,6B,54,30,01,00,FF,E9,9C,80,72,6B,54,30,01,00,FF,E9,9C,80,72,6B,54,30,01,00,00,00
+
+
+
+# JBBF3R
+
+PIA_EDC                                                                 // Enables EDC M3 key profile setting.
+    mit_mmi
+EDC_LED_SWITCH                                                          // Enables EDC button instead of Servotronic PWM from JBE.
+    aktiv
+DSC_SWITCH                                                              // Disabled for M3 hazards cluster.
+    nicht_aktiv
+RPA_SWITCH                                                              // Enables the Flat tyre monitor reset button.
+    aktiv
+SCHEINWERFERREININUNG                                                   // Disables the built in logic for headlight cleaning.
+    nicht_aktiv
+
+
+# FRM
+
+ASP_KOMFORT_EINKLAPP                                                    // Disable the original comfort fold mirror behavior.
+    nicht_aktiv
+MAX_SCHWENK_V_H_BEGR_SP                                                 // Faster swivel speed (horizontal) in sport mode.
+    wert_21
