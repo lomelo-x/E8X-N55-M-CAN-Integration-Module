@@ -84,22 +84,15 @@ bool initializeKCAN() {
     KCAN.setClock(FLEXCAN_CLOCK::CLK_24MHz);
     
     // Set explicit pins for K-CAN with TJA1050
-    KCAN.setTX(22);
-    KCAN.setRX(23);
+    KCAN.setTX(FLEXCAN_PINS::ALT);  // Pin 22
+    KCAN.setRX(FLEXCAN_PINS::ALT);  // Pin 23
     
     // Initialize with default settings first
     KCAN.begin();
     delay(250); // Give time for transceiver to stabilize
     
-    // Configure for 100kbps with TJA1050 settings
-    FLEXCAN_timings_t config;
-    config.propseg = 6;
-    config.pseg1 = 7;
-    config.pseg2 = 4;
-    config.rjw = 4;
-    config.presdiv = 24;
-    KCAN.setBaudRate(config);
-    
+    // Configure for 100kbps
+    KCAN.setBaudRate(100000);
     KCAN.setMaxMB(16);
     KCAN.enableFIFO();
     KCAN.enableFIFOInterrupt();
@@ -132,22 +125,15 @@ bool initializePTCAN() {
     PTCAN.setClock(FLEXCAN_CLOCK::CLK_24MHz);
     
     // Set explicit pins for PT-CAN with TJA1050
-    PTCAN.setTX(0);
-    PTCAN.setRX(1);
+    PTCAN.setTX(FLEXCAN_PINS::DEF);  // Pin 0
+    PTCAN.setRX(FLEXCAN_PINS::DEF);  // Pin 1
     
     // Initialize with default settings first
     PTCAN.begin();
     delay(250); // Give time for transceiver to stabilize
     
-    // Configure for 500kbps with TJA1050 settings
-    FLEXCAN_timings_t config;
-    config.propseg = 6;
-    config.pseg1 = 7;
-    config.pseg2 = 4;
-    config.rjw = 4;
-    config.presdiv = 4;
-    PTCAN.setBaudRate(config);
-    
+    // Configure for 500kbps
+    PTCAN.setBaudRate(500000);
     PTCAN.setMaxMB(16);
     PTCAN.enableFIFO();
     PTCAN.enableFIFOInterrupt();
