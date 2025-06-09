@@ -81,85 +81,123 @@ void initializeGaugeMessages() {
 }
 
 bool initializeKCAN() {
+    Serial.println("K-CAN: Setting up pins and clock...");
     KCAN.setClock(FLEXCAN_CLOCK::CLK_24MHz);
-    
-    // Set explicit pins for K-CAN with TJA1050
     KCAN.setTX(FLEXCAN_PINS::ALT);  // Pin 22
     KCAN.setRX(FLEXCAN_PINS::ALT);  // Pin 23
     
-    // Initialize with default settings first
+    Serial.println("K-CAN: Starting initialization...");
     KCAN.begin();
     delay(250); // Give time for transceiver to stabilize
     
-    // Configure for 100kbps
-    KCAN.setBaudRate(100000);
+    // Start with lower baud rate in listen-only mode
+    Serial.println("K-CAN: Setting initial parameters...");
+    KCAN.setBaudRate(95000, FLEXCAN_RXTX::LISTEN_ONLY);
     KCAN.setMaxMB(16);
     KCAN.enableFIFO();
     KCAN.enableFIFOInterrupt();
     
-    delay(100);
+    Serial.println("K-CAN: Listening for bus activity...");
     
     // Try to read the bus first
     CAN_message_t msg;
-    uint32_t timeout = millis() + 1000;
+    uint32_t timeout = millis() + 2000; // Extended timeout
+    bool activity = false;
+    
     while (millis() < timeout) {
         if (KCAN.read(msg)) {
-            Serial.println("K-CAN: Bus activity detected");
-            return true;
+            Serial.print("K-CAN: Message received! ID: 0x");
+            Serial.print(msg.id, HEX);
+            Serial.print(" Length: ");
+            Serial.println(msg.len);
+            activity = true;
+            break;
         }
         delay(1);
     }
     
-    Serial.println("K-CAN: No bus activity detected, attempting to send test message");
+    if (!activity) {
+        Serial.println("K-CAN: No messages detected in listen mode");
+        
+        // Switch to normal mode and try standard speed
+        Serial.println("K-CAN: Switching to normal mode...");
+        KCAN.setBaudRate(100000);
+        delay(100);
+        
+        // Send test message
+        CAN_message_t test_msg;
+        test_msg.id = 0x100;
+        test_msg.len = 8;
+        memset(test_msg.buf, 0, 8);
+        
+        if (!KCAN.write(test_msg)) {
+            Serial.println("K-CAN: Failed to send test message");
+            return false;
+        }
+        Serial.println("K-CAN: Test message sent successfully");
+    }
     
-    // If no messages, try sending a test message
-    CAN_message_t test_msg;
-    test_msg.id = 0x100;
-    test_msg.len = 8;
-    memset(test_msg.buf, 0, 8);
-    
-    return KCAN.write(test_msg);
+    return true;
 }
 
 bool initializePTCAN() {
+    Serial.println("PT-CAN: Setting up pins and clock...");
     PTCAN.setClock(FLEXCAN_CLOCK::CLK_24MHz);
-    
-    // Set explicit pins for PT-CAN with TJA1050
     PTCAN.setTX(FLEXCAN_PINS::DEF);  // Pin 0
     PTCAN.setRX(FLEXCAN_PINS::DEF);  // Pin 1
     
-    // Initialize with default settings first
+    Serial.println("PT-CAN: Starting initialization...");
     PTCAN.begin();
     delay(250); // Give time for transceiver to stabilize
     
-    // Configure for 500kbps
-    PTCAN.setBaudRate(500000);
+    // Start with slightly lower baud rate in listen-only mode
+    Serial.println("PT-CAN: Setting initial parameters...");
+    PTCAN.setBaudRate(485000, FLEXCAN_RXTX::LISTEN_ONLY);
     PTCAN.setMaxMB(16);
     PTCAN.enableFIFO();
     PTCAN.enableFIFOInterrupt();
     
-    delay(100);
+    Serial.println("PT-CAN: Listening for bus activity...");
     
     // Try to read the bus first
     CAN_message_t msg;
-    uint32_t timeout = millis() + 1000;
+    uint32_t timeout = millis() + 2000; // Extended timeout
+    bool activity = false;
+    
     while (millis() < timeout) {
         if (PTCAN.read(msg)) {
-            Serial.println("PT-CAN: Bus activity detected");
-            return true;
+            Serial.print("PT-CAN: Message received! ID: 0x");
+            Serial.print(msg.id, HEX);
+            Serial.print(" Length: ");
+            Serial.println(msg.len);
+            activity = true;
+            break;
         }
         delay(1);
     }
     
-    Serial.println("PT-CAN: No bus activity detected, attempting to send test message");
+    if (!activity) {
+        Serial.println("PT-CAN: No messages detected in listen mode");
+        
+        // Switch to normal mode and try standard speed
+        Serial.println("PT-CAN: Switching to normal mode...");
+        PTCAN.setBaudRate(500000);
+        delay(100);
+        
+        // Send test message
+        CAN_message_t test_msg;
+        test_msg.id = 0x100;
+        test_msg.len = 8;
+        memset(test_msg.buf, 0, 8);
+        
+        if (!PTCAN.write(test_msg)) {
+            Serial.println("PT-CAN: Failed to send test message");
+            return false;
+        }
+        Serial.println("PT-CAN: Test message sent successfully");
+    }
     
-    // If no messages, try sending a test message
-    CAN_message_t test_msg;
-    test_msg.id = 0x100;
-    test_msg.len = 8;
-    memset(test_msg.buf, 0, 8);
-    
-    return PTCAN.write(test_msg);
+    return true;
 }
 
 void setup() {
@@ -176,14 +214,23 @@ void setup() {
     Serial.begin(115200);
     delay(400);
     
-    Serial.println("Starting CAN initialization...");
+    Serial.println("\n\nStarting CAN initialization...");
     Serial.println("Make sure car ignition is ON");
+    Serial.println("Voltage level: Should be ~5V, currently ~4.7V (may affect reliability)");
     delay(1000);
     
-    Serial.println("Initializing K-CAN (100kbps)...");
+    Serial.println("\nInitializing K-CAN (100kbps)...");
     if (!initializeKCAN()) {
         Serial.println("K-CAN initialization failed!");
-        Serial.println("Check: \n1. Car ignition ON?\n2. K-CAN connections on pins 22/23?\n3. Power to TJA1050?");
+        Serial.println("Troubleshooting steps:");
+        Serial.println("1. Check car ignition is ON and waited 30 seconds");
+        Serial.println("2. Verify K-CAN connections:");
+        Serial.println("   - Pin 22 -> TJA1050 TX");
+        Serial.println("   - Pin 23 -> TJA1050 RX");
+        Serial.println("   - Red bundle CANH/CANL correct");
+        Serial.println("3. Check TJA1050 power:");
+        Serial.println("   - VCC voltage (currently 4.7V)");
+        Serial.println("   - Ground connections solid");
         while(1) {
             digitalWrite(LED_BUILTIN, HIGH);
             delay(100);
@@ -193,10 +240,18 @@ void setup() {
     }
     Serial.println("K-CAN initialized successfully");
     
-    Serial.println("Initializing PT-CAN (500kbps)...");
+    Serial.println("\nInitializing PT-CAN (500kbps)...");
     if (!initializePTCAN()) {
         Serial.println("PT-CAN initialization failed!");
-        Serial.println("Check: \n1. Car ignition ON?\n2. PT-CAN connections on pins 0/1?\n3. Power to TJA1050?");
+        Serial.println("Troubleshooting steps:");
+        Serial.println("1. Check car ignition is ON");
+        Serial.println("2. Verify PT-CAN connections:");
+        Serial.println("   - Pin 0 -> TJA1050 TX");
+        Serial.println("   - Pin 1 -> TJA1050 RX");
+        Serial.println("   - Blue bundle CANH/CANL correct");
+        Serial.println("3. Check TJA1050 power:");
+        Serial.println("   - VCC voltage (currently 4.7V)");
+        Serial.println("   - Ground connections solid");
         while(1) {
             digitalWrite(LED_BUILTIN, HIGH);
             delay(100);
@@ -216,7 +271,7 @@ void setup() {
     digitalWrite(LED_BUILTIN, HIGH);
     delay(1000);
     digitalWrite(LED_BUILTIN, LOW);
-    Serial.println("Setup complete - monitoring CAN buses");
+    Serial.println("\nSetup complete - monitoring CAN buses");
 }
 
 void loop() {
