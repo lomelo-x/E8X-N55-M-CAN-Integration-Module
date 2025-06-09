@@ -1,15 +1,15 @@
 #include <Arduino.h>
 #include <FlexCAN_T4.h>
-#include <imxrt_flexcan.h>
+#include "can_core.h"
 
-// CAN bus definitions
-#define CAN1 CAN1
-#define CAN2 CAN2
+// Initialize FlexCAN_T4 objects for K-CAN and PT-CAN
+FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> KCAN;  // CAN1 - K-CAN (100kbps)
+FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> PTCAN; // CAN2 - PT-CAN (500kbps)
 
-FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> KCAN; // K-CAN (100kbps)
-FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> PTCAN; // PT-CAN (500kbps)
+// Global message buffers
+CAN_message_t k_msg, pt_msg;
 
-// Message buffers for gauge control
+// Gauge control message buffers
 CAN_message_t speedo_needle_max_buf, speedo_needle_min_buf;
 CAN_message_t tacho_needle_max_buf, tacho_needle_min_buf;
 CAN_message_t oil_needle_max_buf, oil_needle_min_buf;
@@ -96,6 +96,19 @@ void performGaugeSweep() {
     Serial.println("Gauge sweep complete");
 }
 
+// CAN receive callbacks
+void kcan_receive_callback(const CAN_message_t &msg) {
+    k_msg = msg;  // Store in global buffer
+    Serial.print("K-CAN ID: 0x");
+    Serial.println(msg.id, HEX);
+}
+
+void ptcan_receive_callback(const CAN_message_t &msg) {
+    pt_msg = msg;  // Store in global buffer
+    Serial.print("PT-CAN ID: 0x");
+    Serial.println(msg.id, HEX);
+}
+
 void setup() {
     Serial.begin(115200);
     while (!Serial && millis() < 3000) ; // Wait for serial or timeout
@@ -103,15 +116,23 @@ void setup() {
 
     // Configure K-CAN
     KCAN.begin();
-    KCAN.setBaudRate(100000); // 100kbps
+    KCAN.setBaudRate(KCAN_BAUD); // 100kbps
+    KCAN.setTX(22); // K-CAN TX pin
+    KCAN.setRX(23); // K-CAN RX pin
     KCAN.enableFIFO();
     KCAN.enableFIFOInterrupt();
+    KCAN.onReceive(kcan_receive_callback);
+    KCAN.mailboxStatus();
 
     // Configure PT-CAN
     PTCAN.begin();
-    PTCAN.setBaudRate(500000); // 500kbps
+    PTCAN.setBaudRate(PTCAN_BAUD); // 500kbps
+    PTCAN.setTX(0); // PT-CAN TX pin
+    PTCAN.setRX(1); // PT-CAN RX pin
     PTCAN.enableFIFO();
     PTCAN.enableFIFOInterrupt();
+    PTCAN.onReceive(ptcan_receive_callback);
+    PTCAN.mailboxStatus();
 
     // Initialize gauge messages
     initializeGaugeMessages();
@@ -123,17 +144,7 @@ void setup() {
 }
 
 void loop() {
-    CAN_message_t msg;
-    
-    // Check K-CAN messages
-    if (KCAN.read(msg)) {
-        Serial.print("K-CAN ID: 0x");
-        Serial.println(msg.id, HEX);
-    }
-    
-    // Check PT-CAN messages
-    if (PTCAN.read(msg)) {
-        Serial.print("PT-CAN ID: 0x");
-        Serial.println(msg.id, HEX);
-    }
-}
+    // Process CAN events
+    KCAN.events();
+    PTCAN.events();
+} 
