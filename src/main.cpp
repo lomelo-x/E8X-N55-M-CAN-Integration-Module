@@ -46,6 +46,10 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
     
+    Serial.println("\n=== TEST MESSAGE ===");
+    Serial.println("If you see this, serial is working!");
+    Serial.println("===================");
+    
     Serial.println("\nTeensy 4.0 CAN Test - Auto Speed Detection");
     Serial.println("Testing pins 0/1");
     Serial.println("Will alternate between 100kbps and 500kbps");
