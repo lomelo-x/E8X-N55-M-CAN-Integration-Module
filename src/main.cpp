@@ -8,7 +8,7 @@
 #include <FlexCAN_T4.h>
 #include "imxrt_flexcan.h"
 
-// Test CAN1 (pins 0/1)
+// Test CAN1 (pins 22/23)
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> CAN1_Bus;
 
 void printCANStatus(const char* name, FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16>& can) {
@@ -51,14 +51,14 @@ void setup() {
     Serial.println("===================");
     
     Serial.println("\nTeensy 4.0 CAN Test - Auto Speed Detection");
-    Serial.println("Testing pins 0/1");
+    Serial.println("Testing pins 22/23");
     Serial.println("Will alternate between 100kbps and 500kbps");
     
     // Initialize CAN1
     CAN1_Bus.begin();
     CAN1_Bus.setBaudRate(100000); // Start with 100kbps
-    CAN1_Bus.setTX(0);
-    CAN1_Bus.setRX(1);
+    CAN1_Bus.setTX(ALT);
+    CAN1_Bus.setRX(ALT);
     CAN1_Bus.setMaxMB(16);
     CAN1_Bus.enableFIFO();
     CAN1_Bus.enableFIFOInterrupt();
