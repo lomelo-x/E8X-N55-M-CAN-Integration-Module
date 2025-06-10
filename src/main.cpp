@@ -8,7 +8,7 @@
 #include <FlexCAN_T4.h>
 #include "imxrt_flexcan.h"
 
-// Only test CAN1 (pins 22/23) first
+// Test CAN1 (pins 0/1)
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> CAN1_Bus;
 
 void printCANStatus(const char* name, FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16>& can) {
@@ -29,7 +29,7 @@ void printCANStatus(const char* name, FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16>&
     
     Serial.print("Error State: ");
     Serial.println((char*)err.FLT_CONF);
-    
+
     // Print specific errors if any
     if (err.BIT1_ERR) Serial.println("  Bit1 Error detected");
     if (err.BIT0_ERR) Serial.println("  Bit0 Error detected");
@@ -46,18 +46,21 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
     
-    Serial.println("\nTeensy 4.0 CAN Test - PT-CAN Test");
-    Serial.println("Testing pins 22/23 at 500kbps (PT-CAN)");
-
-    // Initialize CAN1 for PT-CAN
+    Serial.println("\nTeensy 4.0 CAN Test - Auto Speed Detection");
+    Serial.println("Testing pins 0/1");
+    Serial.println("Will alternate between 100kbps and 500kbps");
+    
+    // Initialize CAN1
     CAN1_Bus.begin();
-    CAN1_Bus.setBaudRate(500000); // PT-CAN runs at 500kbps
+    CAN1_Bus.setBaudRate(100000); // Start with 100kbps
+    CAN1_Bus.setTX(0);
+    CAN1_Bus.setRX(1);
     CAN1_Bus.setMaxMB(16);
     CAN1_Bus.enableFIFO();
     CAN1_Bus.enableFIFOInterrupt();
     
     printCANStatus("Initial", CAN1_Bus);
-    Serial.println("\nMonitoring for PT-CAN messages...");
+    Serial.println("\nMonitoring for CAN messages...");
     Serial.println("Make sure ignition is in position II");
     Serial.flush();
 }
@@ -65,8 +68,11 @@ void setup() {
 void loop() {
     static uint32_t lastBlink = 0;
     static uint32_t lastStatus = 0;
+    static uint32_t lastSpeedSwitch = 0;
     static uint32_t msgCount = 0;
-    static uint32_t errorCount = 0;
+    static bool using100k = true;
+    static uint32_t errors100k = 0;
+    static uint32_t errors500k = 0;
     
     // Heartbeat LED
     if (millis() - lastBlink > 500) {
@@ -79,19 +85,35 @@ void loop() {
         CAN_error_t err;
         CAN1_Bus.error(err, false);
         
-        Serial.print("\nPT-CAN Status - Messages: ");
+        Serial.print("\nSpeed: ");
+        Serial.print(using100k ? "100kbps" : "500kbps");
+        Serial.print(" Messages: ");
         Serial.print(msgCount);
         Serial.print(" Errors: ");
-        Serial.println(errorCount);
+        Serial.println(using100k ? errors100k : errors500k);
         
-        // Update error count
+        // Update error counts
         if (err.BIT1_ERR || err.BIT0_ERR || err.ACK_ERR || err.CRC_ERR || err.FRM_ERR || err.STF_ERR) {
-            errorCount++;
+            if (using100k) errors100k++;
+            else errors500k++;
         }
         
         printCANStatus("Current", CAN1_Bus);
         msgCount = 0;
         lastStatus = millis();
+    }
+
+    // Switch speeds every 10 seconds
+    if (millis() - lastSpeedSwitch > 10000) {
+        using100k = !using100k;
+        CAN1_Bus.setBaudRate(using100k ? 100000 : 500000);
+        Serial.print("\nSwitching to ");
+        Serial.print(using100k ? "100kbps" : "500kbps");
+        Serial.println("...");
+        lastSpeedSwitch = millis();
+        
+        // Reset message count when switching speeds
+        msgCount = 0;
     }
     
     // Check for messages
