@@ -52,4 +52,12 @@ void kcan_write_msg(CAN_message_t &msg) {
 // Send a CAN message on PT-CAN
 void ptcan_write_msg(CAN_message_t &msg) {
     PTCAN.write(msg);
+}
+
+void initializeGaugeMessages() {
+    // Implementation of initializeGaugeMessages function
+}
+
+void performGaugeSweep() {
+    // Implementation of performGaugeSweep function
 } 
