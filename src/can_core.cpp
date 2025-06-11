@@ -1,5 +1,7 @@
 #include "can_core.h"
 
+bool rapid_blink = false;
+
 // Define global CAN objects
 FlexCAN_T4<CAN_DEV_TABLE::CAN1, RX_SIZE_256, TX_SIZE_16> KCAN;
 FlexCAN_T4<CAN_DEV_TABLE::CAN2, RX_SIZE_256, TX_SIZE_16> PTCAN;
