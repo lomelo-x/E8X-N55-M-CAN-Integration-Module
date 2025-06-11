@@ -38,3 +38,6 @@ private_config.h
 build/
 .build/
 *.eep
+
+# Clang Format
+.clang-format
