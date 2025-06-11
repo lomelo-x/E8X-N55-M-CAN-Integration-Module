@@ -7,133 +7,193 @@
 #include <Arduino.h>
 #include <FlexCAN_T4.h>
 #include "imxrt_flexcan.h"
+#include <stdint.h>
 
-// Test CAN1 (pins 22/23)
-FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> CAN1_Bus;
+// CAN bus definitions
+// Note: Actual Teensy connections:
+// K-CAN:  RX on pin 0, TX on pin 1
+// PT-CAN: RX on pin 23, TX on pin 22
+FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> KCAN; // K-CAN (100kbps) - pins 0(RX)/1(TX)
+FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> PTCAN; // PT-CAN (500kbps) - pins 23(RX)/22(TX)
 
-void printCANStatus(const char* name, FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16>& can) {
-    CAN_error_t err;
-    can.error(err, false);
-    
-    Serial.print("\n=== ");
-    Serial.print(name);
-    Serial.println(" Status ===");
-    
-    Serial.print("Bus State: ");
-    Serial.println((char*)err.state);
-    
-    Serial.print("Error Counters - RX: ");
-    Serial.print(err.RX_ERR_COUNTER);
-    Serial.print(" TX: ");
-    Serial.println(err.TX_ERR_COUNTER);
-    
-    Serial.print("Error State: ");
-    Serial.println((char*)err.FLT_CONF);
+// Test message configuration
+const uint32_t TEST_MSG_ID = 0x123;  // Test message ID
+const uint32_t TEST_INTERVAL = 1000; // Send test message every 1 second
+uint32_t lastTestTime = 0;
+uint32_t kcanSentCount = 0;
+uint32_t kcanReceivedCount = 0;
+uint32_t ptcanSentCount = 0;
+uint32_t ptcanReceivedCount = 0;
 
-    // Print specific errors if any
-    if (err.BIT1_ERR) Serial.println("  Bit1 Error detected");
-    if (err.BIT0_ERR) Serial.println("  Bit0 Error detected");
-    if (err.ACK_ERR) Serial.println("  Acknowledge Error detected");
-    if (err.CRC_ERR) Serial.println("  CRC Error detected");
-    if (err.FRM_ERR) Serial.println("  Form Error detected");
-    if (err.STF_ERR) Serial.println("  Stuff Error detected");
+void sendTestMessage() {
+    CAN_message_t testMsg;
+    testMsg.id = TEST_MSG_ID;
+    testMsg.len = 8;
+    testMsg.buf[0] = 0xAA;  // Test pattern
+    testMsg.buf[1] = 0x55;
+    testMsg.buf[2] = 0x12;
+    testMsg.buf[3] = 0x34;
+    testMsg.buf[4] = 0x56;
+    testMsg.buf[5] = 0x78;
+    testMsg.buf[6] = 0x9A;
+    testMsg.buf[7] = 0xBC;
+
+    // Send on K-CAN
+    if (KCAN.write(testMsg)) {
+        kcanSentCount++;
+        Serial.print("K-CAN: Sent message #");
+        Serial.print(kcanSentCount);
+        Serial.print(" (ID: 0x");
+        Serial.print(testMsg.id, HEX);
+        Serial.println(")");
+    } else {
+        Serial.println("K-CAN: Failed to send test message");
+    }
+    
+    // Send on PT-CAN
+    if (PTCAN.write(testMsg)) {
+        ptcanSentCount++;
+        Serial.print("PT-CAN: Sent message #");
+        Serial.print(ptcanSentCount);
+        Serial.print(" (ID: 0x");
+        Serial.print(testMsg.id, HEX);
+        Serial.println(")");
+    } else {
+        Serial.println("PT-CAN: Failed to send test message");
+    }
+}
+
+void printStats() {
+    Serial.println("\n=== CAN Bus Statistics ===");
+    Serial.print("K-CAN:  Sent: ");
+    Serial.print(kcanSentCount);
+    Serial.print("  Received: ");
+    Serial.println(kcanReceivedCount);
+    Serial.print("PT-CAN: Sent: ");
+    Serial.print(ptcanSentCount);
+    Serial.print("  Received: ");
+    Serial.println(ptcanReceivedCount);
+    Serial.println("=======================\n");
+}
+
+void printCANMessage(const char* bus, const CAN_message_t &msg) {
+    if (strcmp(bus, "K-CAN") == 0) {
+        kcanReceivedCount++;
+    } else if (strcmp(bus, "PT-CAN") == 0) {
+        ptcanReceivedCount++;
+    }
+    
+    Serial.print(bus);
+    Serial.print(": Received message (ID: 0x");
+    Serial.print(msg.id, HEX);
+    Serial.print(") LEN: ");
+    Serial.print(msg.len);
+    Serial.print(" DATA: ");
+    for (int i = 0; i < msg.len; i++) {
+        if (msg.buf[i] < 0x10) Serial.print("0");
+        Serial.print(msg.buf[i], HEX);
+        Serial.print(" ");
+    }
+    Serial.println();
 }
 
 void setup() {
-    // LED for visual feedback
     pinMode(LED_BUILTIN, OUTPUT);
-    
     Serial.begin(115200);
-    delay(1000);
     
-    Serial.println("\n=== TEST MESSAGE ===");
-    Serial.println("If you see this, serial is working!");
-    Serial.println("===================");
+    // Wait for Serial to be ready - needed for USB Serial on Teensy
+    while (!Serial) {
+        digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));  // Blink LED while waiting
+        delay(100);
+    }
+    digitalWrite(LED_BUILTIN, HIGH);  // LED on once Serial is ready
     
-    Serial.println("\nTeensy 4.0 CAN Test - Auto Speed Detection");
-    Serial.println("Testing pins 22/23");
-    Serial.println("Will alternate between 100kbps and 500kbps");
-    
-    // Initialize CAN1
-    CAN1_Bus.begin();
-    CAN1_Bus.setBaudRate(100000); // Start with 100kbps
-    CAN1_Bus.setTX(ALT);
-    CAN1_Bus.setRX(ALT);
-    CAN1_Bus.setMaxMB(16);
-    CAN1_Bus.enableFIFO();
-    CAN1_Bus.enableFIFOInterrupt();
-    
-    printCANStatus("Initial", CAN1_Bus);
-    Serial.println("\nMonitoring for CAN messages...");
-    Serial.println("Make sure ignition is in position II");
-    Serial.flush();
+    Serial.println("\n=== DUAL CAN LOGGER ===");
+    Serial.println("K-CAN: pins 0(RX)/1(TX) @ 100kbps");
+    Serial.println("PT-CAN: pins 23(RX)/22(TX) @ 500kbps");
+    Serial.println("Sending test messages every 1 second");
+    Serial.println("Test message ID: 0x123");
+    Serial.println("=======================");
+
+    // Initialize K-CAN (CAN1)
+    KCAN.begin();
+    KCAN.setBaudRate(100000); // 100kbps
+    KCAN.setRX(DEF); // pin 0 (RX)
+    KCAN.setTX(DEF); // pin 1 (TX)
+    KCAN.setMaxMB(16);
+    KCAN.enableFIFO();
+    KCAN.enableFIFOInterrupt();
+
+    // Initialize PT-CAN (CAN2)
+    PTCAN.begin();
+    PTCAN.setBaudRate(500000); // 500kbps
+    PTCAN.setRX(ALT); // pin 23 (RX)
+    PTCAN.setTX(ALT); // pin 22 (TX)
+    PTCAN.setMaxMB(16);
+    PTCAN.enableFIFO();
+    PTCAN.enableFIFOInterrupt();
+
+    Serial.println("Ready to log both CAN buses.");
+    digitalWrite(LED_BUILTIN, LOW);  // Ready to start normal operation
 }
 
 void loop() {
-    static uint32_t lastBlink = 0;
-    static uint32_t lastStatus = 0;
-    static uint32_t lastSpeedSwitch = 0;
-    static uint32_t msgCount = 0;
-    static bool using100k = true;
-    static uint32_t errors100k = 0;
-    static uint32_t errors500k = 0;
-    
-    // Heartbeat LED
-    if (millis() - lastBlink > 500) {
-        digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-        lastBlink = millis();
-    }
-    
-    // Print status every 5 seconds
-    if (millis() - lastStatus > 5000) {
-        CAN_error_t err;
-        CAN1_Bus.error(err, false);
-        
-        Serial.print("\nSpeed: ");
-        Serial.print(using100k ? "100kbps" : "500kbps");
-        Serial.print(" Messages: ");
-        Serial.print(msgCount);
-        Serial.print(" Errors: ");
-        Serial.println(using100k ? errors100k : errors500k);
-        
-        // Update error counts
-        if (err.BIT1_ERR || err.BIT0_ERR || err.ACK_ERR || err.CRC_ERR || err.FRM_ERR || err.STF_ERR) {
-            if (using100k) errors100k++;
-            else errors500k++;
-        }
-        
-        printCANStatus("Current", CAN1_Bus);
-        msgCount = 0;
-        lastStatus = millis();
+    CAN_message_t msg;
+    uint32_t currentTime = millis();
+
+    // Send test message every TEST_INTERVAL milliseconds
+    if (currentTime - lastTestTime >= TEST_INTERVAL) {
+        sendTestMessage();
+        printStats();  // Print statistics after each test message
+        lastTestTime = currentTime;
     }
 
-    // Switch speeds every 10 seconds
-    if (millis() - lastSpeedSwitch > 10000) {
-        using100k = !using100k;
-        CAN1_Bus.setBaudRate(using100k ? 100000 : 500000);
-        Serial.print("\nSwitching to ");
-        Serial.print(using100k ? "100kbps" : "500kbps");
-        Serial.println("...");
-        lastSpeedSwitch = millis();
-        
-        // Reset message count when switching speeds
-        msgCount = 0;
+    // Read K-CAN
+    while (KCAN.read(msg)) {
+        printCANMessage("K-CAN", msg);
     }
     
-    // Check for messages
-    CAN_message_t msg;
-    if (CAN1_Bus.read(msg)) {
-        msgCount++;
-        Serial.print("ID: 0x");
-        Serial.print(msg.id, HEX);
-        Serial.print(" Len: ");
-        Serial.print(msg.len);
-        Serial.print(" Data: ");
-        for (uint8_t i = 0; i < msg.len; i++) {
-            if (msg.buf[i] < 0x10) Serial.print("0");
-            Serial.print(msg.buf[i], HEX);
-            Serial.print(" ");
-        }
-        Serial.println();
+    // Read PT-CAN
+    while (PTCAN.read(msg)) {
+        printCANMessage("PT-CAN", msg);
+    }
+    
+    // Heartbeat LED pattern (non-blocking)
+    static uint32_t lastTime = 0;
+    static uint8_t state = 0;
+    uint32_t now = millis();
+
+    switch (state) {
+        case 0:
+            digitalWrite(LED_BUILTIN, HIGH);
+            lastTime = now;
+            state = 1;
+            break;
+        case 1:
+            if (now - lastTime >= 100) { // ON for 100ms
+                digitalWrite(LED_BUILTIN, LOW);
+                lastTime = now;
+                state = 2;
+            }
+            break;
+        case 2:
+            if (now - lastTime >= 100) { // OFF for 100ms
+                digitalWrite(LED_BUILTIN, HIGH);
+                lastTime = now;
+                state = 3;
+            }
+            break;
+        case 3:
+            if (now - lastTime >= 100) { // ON for 100ms
+                digitalWrite(LED_BUILTIN, LOW);
+                lastTime = now;
+                state = 4;
+            }
+            break;
+        case 4:
+            if (now - lastTime >= 700) { // OFF for 700ms pause before repeat
+                state = 0;
+            }
+            break;
     }
 } 
