@@ -17,4 +17,4 @@ void kcan_receive_callback(const CAN_message_t &msg) {
 void ptcan_receive_callback(const CAN_message_t &msg) {
     // Handle PT-CAN messages
     pt_msg = msg;
-} 
+}
