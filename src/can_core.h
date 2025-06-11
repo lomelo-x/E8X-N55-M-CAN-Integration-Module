@@ -18,6 +18,9 @@ extern FlexCAN_T4<CAN_DEV_TABLE::CAN2, RX_SIZE_256, TX_SIZE_16> PTCAN;
 extern CAN_message_t k_msg;   // Global buffer for K-CAN received messages
 extern CAN_message_t pt_msg;  // Global buffer for PT-CAN received messages
 
+// Heartbeat rapid blink flag
+extern bool rapid_blink;
+
 // Function declarations
 void kcan_receive_callback(const CAN_message_t &msg);
 void ptcan_receive_callback(const CAN_message_t &msg);
