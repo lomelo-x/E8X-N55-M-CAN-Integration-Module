@@ -7,23 +7,55 @@ CAN_message_t msg;
 
 #define HEARTBEAT_LED 13
 
-void setup(void) {
+void setup() {
     Serial.begin(115200);
-    Serial.println("E8X-M-CAN Initializing...");
-    can1.begin();
-    can1.setBaudRate(125000); // Set to your K-CAN baud rate if needed
-    can2.begin();
-    can2.setBaudRate(125000); // Set to your PT-CAN baud rate if needed
-    delay(100);
+    while (!Serial && millis() < 3000) ; // Wait for serial or timeout
+    Serial.println("E8X N55 M-CAN Integration Module Starting...");
+
+    // Configure K-CAN
+    KCAN.begin();
+    KCAN.setBaudRate(100000); // 100kbps
+    KCAN.setTX(22); // K-CAN TX pin
+    KCAN.setRX(23); // K-CAN RX pin
+    KCAN.enableFIFO();
+    KCAN.enableFIFOInterrupt();
+
+    // Configure PT-CAN
+    PTCAN.begin();
+    PTCAN.setBaudRate(500000); // 500kbps
+    PTCAN.setTX(0); // PT-CAN TX pin
+    PTCAN.setRX(1); // PT-CAN RX pin
+    PTCAN.enableFIFO();
+    PTCAN.enableFIFOInterrupt();
+
+    // Initialize gauge messages
     Serial.println("Gauge Sweep Initializing...");
     initializeGaugeMessages();
+
+    Serial.println("CAN buses initialized");
+    
+    // Perform initial gauge sweep
     Serial.println("Gauge Sweep Starting...");
     performGaugeSweep();
+
     Serial.println("Gauge Sweep Completed");
     pinMode(HEARTBEAT_LED, OUTPUT);
 }
 
 void loop() {
+    CAN_message_t msg;
+    
+    // Check K-CAN messages
+    if (KCAN.read(msg)) {
+        Serial.print("K-CAN ID: 0x");
+        Serial.println(msg.id, HEX);
+    }
+    
+    // Check PT-CAN messages
+    if (PTCAN.read(msg)) {
+        Serial.print("PT-CAN ID: 0x");
+        Serial.println(msg.id, HEX);
+    }
     static uint32_t lastMillis = 0;
     static uint8_t state = 0;
     static bool ledState = false;
@@ -51,3 +83,4 @@ void loop() {
         }
     }
 }
+
