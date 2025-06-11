@@ -1,4 +1,5 @@
 #include <FlexCAN_T4.h>
+#include "can_core.h"
 
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> can1;
 FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> can2;
@@ -13,8 +14,6 @@ CAN_message_t oil_needle_min_buf;
 CAN_message_t oil_needle_max_buf;
 
 #define HEARTBEAT_LED 13
-
-bool rapid_blink = false;
 
 void initializeGaugeMessages() {
     speedo_needle_min_buf.id = 0x6F1;
@@ -80,8 +79,7 @@ void setup(void) {
     delay(100);
     initializeGaugeMessages();
     performGaugeSweep();
-
-    pinMode(HEARTBEAT_LED, OUTPUT); // Set LED pin as output
+    pinMode(HEARTBEAT_LED, OUTPUT);
 }
 
 void loop() {
@@ -90,6 +88,9 @@ void loop() {
     static bool ledState = false;
     uint32_t now = millis();
 
+    // Heartbeat LED logic (double pulse or rapid blink)
+    // You may want to move rapid_blink to can_core.h/cpp if you want to control it from there
+    extern bool rapid_blink;
     if (rapid_blink) {
         // Rapid blink: 50ms on, 50ms off
         if (now - lastMillis >= 50) {
