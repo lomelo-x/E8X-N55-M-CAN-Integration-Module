@@ -5,8 +5,8 @@
 #include <FlexCAN_T4.h>
 
 // CAN bus configuration
-#define KCAN_BAUD 100000  // 100kbps
-#define PTCAN_BAUD 500000 // 500kbps
+#define KCAN_BAUD 100000   // 100kbps
+#define PTCAN_BAUD 500000  // 500kbps
 #define KCAN_RX_SIZE 1024
 #define KCAN_TX_SIZE 128
 #define PTCAN_RX_SIZE 1024
@@ -27,4 +27,4 @@ void ptcan_receive_callback(const CAN_message_t &msg);
 void initializeGaugeMessages();
 void performGaugeSweep();
 
-#endif // CAN_CORE_H 
+#endif  // CAN_CORE_H
