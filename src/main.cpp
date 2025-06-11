@@ -15,8 +15,11 @@ void setup(void) {
     can2.begin();
     can2.setBaudRate(125000); // Set to your PT-CAN baud rate if needed
     delay(100);
+    Serial.println("Gauge Sweep Initializing...");
     initializeGaugeMessages();
+    Serial.println("Gauge Sweep Starting...");
     performGaugeSweep();
+    Serial.println("Gauge Sweep Completed");
     pinMode(HEARTBEAT_LED, OUTPUT);
 }
 
