@@ -1,4 +1,5 @@
 #include <FlexCAN_T4.h>
+
 #include "can_core.h"
 #include "gauge_sweep.h"
 
@@ -12,13 +13,13 @@ void setup(void) {
     Serial.begin(115200);
     Serial.println("E8X-M-CAN Initializing...");
     can1.begin();
-    can1.setBaudRate(125000); // Set to your K-CAN baud rate if needed
-    can1.setTX(DEF);            // Use default TX pin for KCAN
-    can1.setRX(DEF);            // Use default RX pin for KCAN
+    can1.setBaudRate(125000);  // Set to your K-CAN baud rate if needed
+    can1.setTX(DEF);           // Use default TX pin for KCAN
+    can1.setRX(DEF);           // Use default RX pin for KCAN
     can2.begin();
-    can2.setBaudRate(125000); // Set to your PT-CAN baud rate if needed
-    can2.setTX(DEF);            // Use default TX pin for PTCAN
-    can2.setRX(DEF);            // Use default RX pin for PTCAN
+    can2.setBaudRate(125000);  // Set to your PT-CAN baud rate if needed
+    can2.setTX(DEF);           // Use default TX pin for PTCAN
+    can2.setRX(DEF);           // Use default RX pin for PTCAN
     delay(100);
     Serial.println("Gauge Sweep Initializing...");
     initializeGaugeMessages();
@@ -45,14 +46,34 @@ void loop() {
     } else {
         // Double pulse heartbeat
         switch (state) {
-            case 0: digitalWrite(HEARTBEAT_LED, HIGH);
-                    if (now - lastMillis >= 150) { lastMillis = now; state = 1; } break;
-            case 1: digitalWrite(HEARTBEAT_LED, LOW);
-                    if (now - lastMillis >= 150) { lastMillis = now; state = 2; } break;
-            case 2: digitalWrite(HEARTBEAT_LED, HIGH);
-                    if (now - lastMillis >= 150) { lastMillis = now; state = 3; } break;
-            case 3: digitalWrite(HEARTBEAT_LED, LOW);
-                    if (now - lastMillis >= 1500) { lastMillis = now; state = 0; } break;
+            case 0:
+                digitalWrite(HEARTBEAT_LED, HIGH);
+                if (now - lastMillis >= 150) {
+                    lastMillis = now;
+                    state = 1;
+                }
+                break;
+            case 1:
+                digitalWrite(HEARTBEAT_LED, LOW);
+                if (now - lastMillis >= 150) {
+                    lastMillis = now;
+                    state = 2;
+                }
+                break;
+            case 2:
+                digitalWrite(HEARTBEAT_LED, HIGH);
+                if (now - lastMillis >= 150) {
+                    lastMillis = now;
+                    state = 3;
+                }
+                break;
+            case 3:
+                digitalWrite(HEARTBEAT_LED, LOW);
+                if (now - lastMillis >= 1500) {
+                    lastMillis = now;
+                    state = 0;
+                }
+                break;
         }
     }
 }
