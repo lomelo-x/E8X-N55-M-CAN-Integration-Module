@@ -1,4 +1,5 @@
 #include "gauge_sweep.h"
+
 #include <Arduino.h>
 
 // Extern CAN objects and buffers
@@ -20,20 +21,20 @@ void performGaugeSweep() {
     for (uint8_t i = 0; i <= 100; i++) {
         // Update speedometer (0x1A6)
         k_msg.id = 0x1A6;
-        k_msg.buf[0] = i; // Speed value
+        k_msg.buf[0] = i;  // Speed value
         KCAN.write(k_msg);
 
         // Update tachometer (0x0AA)
         k_msg.id = 0x0AA;
-        k_msg.buf[0] = i; // RPM value
+        k_msg.buf[0] = i;  // RPM value
         KCAN.write(k_msg);
 
         // Update oil temperature (0x1A6)
         k_msg.id = 0x1A6;
-        k_msg.buf[1] = i; // Temperature value
+        k_msg.buf[1] = i;  // Temperature value
         KCAN.write(k_msg);
 
-        delay(50); // Adjust speed of sweep
+        delay(50);  // Adjust speed of sweep
     }
     rapid_blink = false;
-} 
+}
