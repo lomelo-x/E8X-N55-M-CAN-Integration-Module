@@ -1,199 +1,108 @@
-#if !defined(ARDUINO) 
-#define HIGH 1
-#define LOW 0
-#define OUTPUT 1
-#endif
-
-#include <Arduino.h>
 #include <FlexCAN_T4.h>
-#include "imxrt_flexcan.h"
-#include <stdint.h>
 
-// CAN bus definitions
-// Note: Actual Teensy connections:
-// K-CAN:  RX on pin 0, TX on pin 1
-// PT-CAN: RX on pin 23, TX on pin 22
-FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> KCAN; // K-CAN (100kbps) - pins 0(RX)/1(TX)
-FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> PTCAN; // PT-CAN (500kbps) - pins 23(RX)/22(TX)
+FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> can1;
+FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> can2;
+CAN_message_t msg;
 
-// Test message configuration
-const uint32_t TEST_MSG_ID = 0x123;  // Test message ID
-const uint32_t TEST_INTERVAL = 1000; // Send test message every 1 second
-uint32_t lastTestTime = 0;
-uint32_t kcanSentCount = 0;
-uint32_t kcanReceivedCount = 0;
-uint32_t ptcanSentCount = 0;
-uint32_t ptcanReceivedCount = 0;
+// Example gauge sweep message buffers (update these as needed for your cluster)
+CAN_message_t speedo_needle_min_buf;
+CAN_message_t speedo_needle_max_buf;
+CAN_message_t tacho_needle_min_buf;
+CAN_message_t tacho_needle_max_buf;
+CAN_message_t oil_needle_min_buf;
+CAN_message_t oil_needle_max_buf;
 
-void sendTestMessage() {
-    CAN_message_t testMsg;
-    testMsg.id = TEST_MSG_ID;
-    testMsg.len = 8;
-    testMsg.buf[0] = 0xAA;  // Test pattern
-    testMsg.buf[1] = 0x55;
-    testMsg.buf[2] = 0x12;
-    testMsg.buf[3] = 0x34;
-    testMsg.buf[4] = 0x56;
-    testMsg.buf[5] = 0x78;
-    testMsg.buf[6] = 0x9A;
-    testMsg.buf[7] = 0xBC;
+void initializeGaugeMessages() {
+    speedo_needle_min_buf.id = 0x6F1;
+    speedo_needle_min_buf.len = 8;
+    uint8_t speedo_min[8] = {0x60, 0x05, 0x30, 0x20, 0x06, 0x00, 0x00, 0};
+    memcpy(speedo_needle_min_buf.buf, speedo_min, 8);
 
-    // Send on K-CAN
-    if (KCAN.write(testMsg)) {
-        kcanSentCount++;
-        Serial.print("K-CAN: Sent message #");
-        Serial.print(kcanSentCount);
-        Serial.print(" (ID: 0x");
-        Serial.print(testMsg.id, HEX);
-        Serial.println(")");
-    } else {
-        Serial.println("K-CAN: Failed to send test message");
-    }
-    
-    // Send on PT-CAN
-    if (PTCAN.write(testMsg)) {
-        ptcanSentCount++;
-        Serial.print("PT-CAN: Sent message #");
-        Serial.print(ptcanSentCount);
-        Serial.print(" (ID: 0x");
-        Serial.print(testMsg.id, HEX);
-        Serial.println(")");
-    } else {
-        Serial.println("PT-CAN: Failed to send test message");
-    }
+    speedo_needle_max_buf.id = 0x6F1;
+    speedo_needle_max_buf.len = 8;
+    uint8_t speedo_max[8] = {0x60, 0x05, 0x30, 0x20, 0x06, 0x12, 0x11, 0};
+    memcpy(speedo_needle_max_buf.buf, speedo_max, 8);
+
+    tacho_needle_min_buf.id = 0x6F1;
+    tacho_needle_min_buf.len = 8;
+    uint8_t tacho_min[8] = {0x60, 0x05, 0x30, 0x21, 0x06, 0x00, 0x00, 0};
+    memcpy(tacho_needle_min_buf.buf, tacho_min, 8);
+
+    tacho_needle_max_buf.id = 0x6F1;
+    tacho_needle_max_buf.len = 8;
+    uint8_t tacho_max[8] = {0x60, 0x05, 0x30, 0x21, 0x06, 0x12, 0x3D, 0};
+    memcpy(tacho_needle_max_buf.buf, tacho_max, 8);
+
+    oil_needle_min_buf.id = 0x6F1;
+    oil_needle_min_buf.len = 8;
+    uint8_t oil_min[8] = {0x60, 0x05, 0x30, 0x23, 0x06, 0x00, 0x00, 0};
+    memcpy(oil_needle_min_buf.buf, oil_min, 8);
+
+    oil_needle_max_buf.id = 0x6F1;
+    oil_needle_max_buf.len = 8;
+    uint8_t oil_max[8] = {0x60, 0x05, 0x30, 0x23, 0x06, 0x07, 0x12, 0};
+    memcpy(oil_needle_max_buf.buf, oil_max, 8);
 }
 
-void printStats() {
-    Serial.println("\n=== CAN Bus Statistics ===");
-    Serial.print("K-CAN:  Sent: ");
-    Serial.print(kcanSentCount);
-    Serial.print("  Received: ");
-    Serial.println(kcanReceivedCount);
-    Serial.print("PT-CAN: Sent: ");
-    Serial.print(ptcanSentCount);
-    Serial.print("  Received: ");
-    Serial.println(ptcanReceivedCount);
-    Serial.println("=======================\n");
+void performGaugeSweep() {
+    Serial.println("Sweeping gauges...");
+    // Sweep to min
+    can1.write(speedo_needle_min_buf);
+    can1.write(tacho_needle_min_buf);
+    can1.write(oil_needle_min_buf);
+    delay(100);
+    // Sweep to max
+    can1.write(speedo_needle_max_buf);
+    can1.write(tacho_needle_max_buf);
+    can1.write(oil_needle_max_buf);
+    delay(100);
+    // Sweep back to min
+    can1.write(speedo_needle_min_buf);
+    can1.write(tacho_needle_min_buf);
+    can1.write(oil_needle_min_buf);
+    delay(100);
+    Serial.println("Gauge sweep complete");
 }
 
-void printCANMessage(const char* bus, const CAN_message_t &msg) {
-    if (strcmp(bus, "K-CAN") == 0) {
-        kcanReceivedCount++;
-    } else if (strcmp(bus, "PT-CAN") == 0) {
-        ptcanReceivedCount++;
-    }
-    
-    Serial.print(bus);
-    Serial.print(": Received message (ID: 0x");
-    Serial.print(msg.id, HEX);
-    Serial.print(") LEN: ");
-    Serial.print(msg.len);
-    Serial.print(" DATA: ");
-    for (int i = 0; i < msg.len; i++) {
-        if (msg.buf[i] < 0x10) Serial.print("0");
-        Serial.print(msg.buf[i], HEX);
-        Serial.print(" ");
-    }
-    Serial.println();
-}
-
-void setup() {
-    pinMode(LED_BUILTIN, OUTPUT);
+void setup(void) {
     Serial.begin(115200);
-    
-    // Wait for Serial to be ready - needed for USB Serial on Teensy
-    while (!Serial) {
-        digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));  // Blink LED while waiting
-        delay(100);
-    }
-    digitalWrite(LED_BUILTIN, HIGH);  // LED on once Serial is ready
-    
-    Serial.println("\n=== DUAL CAN LOGGER ===");
-    Serial.println("K-CAN: pins 0(RX)/1(TX) @ 100kbps");
-    Serial.println("PT-CAN: pins 23(RX)/22(TX) @ 500kbps");
-    Serial.println("Sending test messages every 1 second");
-    Serial.println("Test message ID: 0x123");
-    Serial.println("=======================");
-
-    // Initialize K-CAN (CAN1)
-    KCAN.begin();
-    KCAN.setBaudRate(100000); // 100kbps
-    KCAN.setRX(DEF); // pin 0 (RX)
-    KCAN.setTX(DEF); // pin 1 (TX)
-    KCAN.setMaxMB(16);
-    KCAN.enableFIFO();
-    KCAN.enableFIFOInterrupt();
-
-    // Initialize PT-CAN (CAN2)
-    PTCAN.begin();
-    PTCAN.setBaudRate(500000); // 500kbps
-    PTCAN.setRX(ALT); // pin 23 (RX)
-    PTCAN.setTX(ALT); // pin 22 (TX)
-    PTCAN.setMaxMB(16);
-    PTCAN.enableFIFO();
-    PTCAN.enableFIFOInterrupt();
-
-    Serial.println("Ready to log both CAN buses.");
-    digitalWrite(LED_BUILTIN, LOW);  // Ready to start normal operation
+    Serial.println("E8X-M-CAN Initializing...");
+    can1.begin();
+    can1.setBaudRate(125000); // Set to your K-CAN baud rate if needed
+    can2.begin();
+    can2.setBaudRate(125000); // Set to your PT-CAN baud rate if needed
+    delay(100);
+    initializeGaugeMessages();
+    performGaugeSweep();
 }
 
 void loop() {
-    CAN_message_t msg;
-    uint32_t currentTime = millis();
+  // Send a test message from CAN2 every second
+  static uint32_t lastSend = 0;
+  if (millis() - lastSend > 1000) {
+    CAN_message_t outMsg;
+    outMsg.id = 0x123;
+    outMsg.len = 8;
+    for (int i = 0; i < 8; i++) outMsg.buf[i] = i;
+    if (can2.write(outMsg)) {
+      Serial.println("Message queued for sending on CAN2");
+    } else {
+      Serial.println("Failed to queue message on CAN2");
+    }
+    lastSend = millis();
+  }
 
-    // Send test message every TEST_INTERVAL milliseconds
-    if (currentTime - lastTestTime >= TEST_INTERVAL) {
-        sendTestMessage();
-        printStats();  // Print statistics after each test message
-        lastTestTime = currentTime;
+  // Read from CAN1
+  if (can1.read(msg)) {
+    Serial.print("CAN1 ");
+    Serial.print("MB: "); Serial.print(msg.mb);
+    Serial.print("  ID: 0x"); Serial.print(msg.id, HEX );
+    Serial.print("  EXT: "); Serial.print(msg.flags.extended );
+    Serial.print("  LEN: "); Serial.print(msg.len);
+    Serial.print(" DATA: ");
+    for (uint8_t i = 0; i < msg.len; i++) {
+      Serial.print(msg.buf[i]); Serial.print(" ");
     }
-
-    // Read K-CAN
-    while (KCAN.read(msg)) {
-        printCANMessage("K-CAN", msg);
-    }
-    
-    // Read PT-CAN
-    while (PTCAN.read(msg)) {
-        printCANMessage("PT-CAN", msg);
-    }
-    
-    // Heartbeat LED pattern (non-blocking)
-    static uint32_t lastTime = 0;
-    static uint8_t state = 0;
-    uint32_t now = millis();
-
-    switch (state) {
-        case 0:
-            digitalWrite(LED_BUILTIN, HIGH);
-            lastTime = now;
-            state = 1;
-            break;
-        case 1:
-            if (now - lastTime >= 100) { // ON for 100ms
-                digitalWrite(LED_BUILTIN, LOW);
-                lastTime = now;
-                state = 2;
-            }
-            break;
-        case 2:
-            if (now - lastTime >= 100) { // OFF for 100ms
-                digitalWrite(LED_BUILTIN, HIGH);
-                lastTime = now;
-                state = 3;
-            }
-            break;
-        case 3:
-            if (now - lastTime >= 100) { // ON for 100ms
-                digitalWrite(LED_BUILTIN, LOW);
-                lastTime = now;
-                state = 4;
-            }
-            break;
-        case 4:
-            if (now - lastTime >= 700) { // OFF for 700ms pause before repeat
-                state = 0;
-            }
-            break;
-    }
-} 
+    Serial.print("  TS: "); Serial.println(msg.timestamp);
+  }
+}
