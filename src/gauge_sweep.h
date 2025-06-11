@@ -10,4 +10,4 @@ extern bool rapid_blink;
 void initializeGaugeMessages();
 void performGaugeSweep();
 
-#endif // GAUGE_SWEEP_H
+#endif  // GAUGE_SWEEP_H
