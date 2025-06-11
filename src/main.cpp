@@ -12,6 +12,10 @@ CAN_message_t tacho_needle_max_buf;
 CAN_message_t oil_needle_min_buf;
 CAN_message_t oil_needle_max_buf;
 
+#define HEARTBEAT_LED 13
+
+bool rapid_blink = false;
+
 void initializeGaugeMessages() {
     speedo_needle_min_buf.id = 0x6F1;
     speedo_needle_min_buf.len = 8;
@@ -46,6 +50,7 @@ void initializeGaugeMessages() {
 
 void performGaugeSweep() {
     Serial.println("Sweeping gauges...");
+    rapid_blink = true;
     // Sweep to min
     can1.write(speedo_needle_min_buf);
     can1.write(tacho_needle_min_buf);
@@ -61,6 +66,7 @@ void performGaugeSweep() {
     can1.write(tacho_needle_min_buf);
     can1.write(oil_needle_min_buf);
     delay(100);
+    rapid_blink = false;
     Serial.println("Gauge sweep complete");
 }
 
@@ -74,35 +80,34 @@ void setup(void) {
     delay(100);
     initializeGaugeMessages();
     performGaugeSweep();
+
+    pinMode(HEARTBEAT_LED, OUTPUT); // Set LED pin as output
 }
 
 void loop() {
-  // Send a test message from CAN2 every second
-  static uint32_t lastSend = 0;
-  if (millis() - lastSend > 1000) {
-    CAN_message_t outMsg;
-    outMsg.id = 0x123;
-    outMsg.len = 8;
-    for (int i = 0; i < 8; i++) outMsg.buf[i] = i;
-    if (can2.write(outMsg)) {
-      Serial.println("Message queued for sending on CAN2");
-    } else {
-      Serial.println("Failed to queue message on CAN2");
-    }
-    lastSend = millis();
-  }
+    static uint32_t lastMillis = 0;
+    static uint8_t state = 0;
+    static bool ledState = false;
+    uint32_t now = millis();
 
-  // Read from CAN1
-  if (can1.read(msg)) {
-    Serial.print("CAN1 ");
-    Serial.print("MB: "); Serial.print(msg.mb);
-    Serial.print("  ID: 0x"); Serial.print(msg.id, HEX );
-    Serial.print("  EXT: "); Serial.print(msg.flags.extended );
-    Serial.print("  LEN: "); Serial.print(msg.len);
-    Serial.print(" DATA: ");
-    for (uint8_t i = 0; i < msg.len; i++) {
-      Serial.print(msg.buf[i]); Serial.print(" ");
+    if (rapid_blink) {
+        // Rapid blink: 50ms on, 50ms off
+        if (now - lastMillis >= 50) {
+            ledState = !ledState;
+            digitalWrite(HEARTBEAT_LED, ledState ? HIGH : LOW);
+            lastMillis = now;
+        }
+    } else {
+        // Double pulse heartbeat
+        switch (state) {
+            case 0: digitalWrite(HEARTBEAT_LED, HIGH);
+                    if (now - lastMillis >= 150) { lastMillis = now; state = 1; } break;
+            case 1: digitalWrite(HEARTBEAT_LED, LOW);
+                    if (now - lastMillis >= 150) { lastMillis = now; state = 2; } break;
+            case 2: digitalWrite(HEARTBEAT_LED, HIGH);
+                    if (now - lastMillis >= 150) { lastMillis = now; state = 3; } break;
+            case 3: digitalWrite(HEARTBEAT_LED, LOW);
+                    if (now - lastMillis >= 1500) { lastMillis = now; state = 0; } break;
+        }
     }
-    Serial.print("  TS: "); Serial.println(msg.timestamp);
-  }
 }
