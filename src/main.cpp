@@ -8,12 +8,53 @@ CAN_message_t msg;
 
 #define HEARTBEAT_LED 13
 
+bool gaugeSweepDone = false;
+
+void printCanMessageWithBus(const char* busName, const CAN_message_t &m) {
+    Serial.print("[");
+    Serial.print(busName);
+    Serial.print("] 0x");
+    Serial.print(m.id, HEX);
+    Serial.print(" DLC:");
+    Serial.print(m.len);
+    Serial.print(" Data: ");
+    for (int i = 0; i < m.len; i++) {
+        if (m.buf[i] < 0x10) Serial.print("0");
+        Serial.print(m.buf[i], HEX);
+        Serial.print(" ");
+    }
+    Serial.println();
+}
+
+bool checkIgnitionOn(const CAN_message_t &m, uint8_t &lastBuf1) {
+    if (m.id == 0x480 && m.len == 8) {
+        Serial.print("0x480 message buf[1]: 0x");
+        Serial.print(m.buf[1], HEX);
+        Serial.print(" lastBuf1: 0x");
+        Serial.println(lastBuf1, HEX);
+
+        // Trigger when buf[1] changes TO 0x42
+        if (m.buf[1] == 0x42 && lastBuf1 != 0x42) {
+            Serial.println("Ignition ON detected by transition!");
+            lastBuf1 = m.buf[1];
+            return true;
+        }
+        lastBuf1 = m.buf[1];
+    }
+    return false;
+}
+
+// Filter for monitored CAN IDs (optional)
+bool isMonitoredID(uint32_t id) {
+    return (id == 0x480 || id == 0x130 || id == 0x12F);
+}
+
 void setup(void) {
     Serial.begin(115200);
     pinMode(HEARTBEAT_LED, OUTPUT);
 
     // Blink rapidly for 2 seconds during initial power-up
-    for (int i = 0; i < 8; ++i) { // 8 blinks at 250ms = 2 seconds
+    for (int i = 0; i < 8; ++i) {
         digitalWrite(HEARTBEAT_LED, HIGH);
         delay(125);
         digitalWrite(HEARTBEAT_LED, LOW);
@@ -22,77 +63,71 @@ void setup(void) {
 
     Serial.println("E8X-M-CAN Initializing...");
     can1.begin();
-    can1.setBaudRate(500000);  // PT-CAN is actually on CAN1
-    can1.setTX(DEF);           // Use default TX pin for PTCAN
-    can1.setRX(DEF);           // Use default RX pin for PTCAN
+    can1.setBaudRate(500000);
+    can1.setTX(DEF);
+    can1.setRX(DEF);
     can2.begin();
-    can2.setBaudRate(100000);  // K-CAN is actually on CAN2
-    can2.setTX(DEF);           // Use default TX pin for KCAN
-    can2.setRX(DEF);           // Use default RX pin for KCAN
+    can2.setBaudRate(500000);
+    can2.setTX(DEF);
+    can2.setRX(DEF);
     delay(100);
+
     Serial.println("CAN Bus Monitor Starting...");
     Serial.println("Waiting for CAN messages...");
 
     Serial.println("Gauge Sweep Initializing...");
     initializeGaugeMessages();
-    Serial.println("Gauge Sweep Starting...");
-    // performGaugeSweep();
-    Serial.println("Gauge Sweep Completed");
 }
 
 void loop() {
     static uint32_t lastMillis = 0;
     static uint8_t state = 0;
-    static bool ledState = false;
     uint32_t now = millis();
 
-    // Check for CAN messages on both buses
+    // Track previous buf[1] for ignition transition detection
+    static uint8_t last_480_buf1 = 0xFF;
+
     CAN_message_t rx_msg;
-    
-    // Check CAN1 (K-CAN)
+
+    // Read and process CAN1 messages
     while (can1.read(rx_msg)) {
-        Serial.print("K-CAN ID: 0x");
-        Serial.print(rx_msg.id, HEX);
-        Serial.print(" Data: ");
-        for (int i = 0; i < rx_msg.len; i++) {
-            Serial.print(rx_msg.buf[i], HEX);
-            Serial.print(" ");
+        if (isMonitoredID(rx_msg.id)) {
+            printCanMessageWithBus("CAN1", rx_msg);
+
+            if (!gaugeSweepDone && checkIgnitionOn(rx_msg, last_480_buf1)) {
+                Serial.println("Ignition detected on CAN1 — starting gauge sweep...");
+                performGaugeSweep();
+                gaugeSweepDone = true;
+            }
         }
-        Serial.println();
     }
 
-    // Check CAN2 (PT-CAN)
+    // Read and process CAN2 messages
     while (can2.read(rx_msg)) {
-        Serial.print("PT-CAN ID: 0x");
-        Serial.print(rx_msg.id, HEX);
-        Serial.print(" Data: ");
-        for (int i = 0; i < rx_msg.len; i++) {
-            Serial.print(rx_msg.buf[i], HEX);
-            Serial.print(" ");
+        if (isMonitoredID(rx_msg.id)) {
+            printCanMessageWithBus("CAN2", rx_msg);
+
+            if (!gaugeSweepDone && checkIgnitionOn(rx_msg, last_480_buf1)) {
+                Serial.println("Ignition detected on CAN2 — starting gauge sweep...");
+                performGaugeSweep();
+                gaugeSweepDone = true;
+            }
         }
-        Serial.println();
     }
 
-    // Heartbeat LED logic
-    if (rapid_blink) {
-        // Rapid blink: 50ms on, 50ms off
-        if (now - lastMillis >= 50) {
-            ledState = !ledState;
-            digitalWrite(HEARTBEAT_LED, ledState ? HIGH : LOW);
-            lastMillis = now;
-        }
-    } else {
-        // Double pulse heartbeat
-        switch (state) {
-            case 0: digitalWrite(HEARTBEAT_LED, HIGH);
-                    if (now - lastMillis >= 150) { lastMillis = now; state = 1; } break;
-            case 1: digitalWrite(HEARTBEAT_LED, LOW);
-                    if (now - lastMillis >= 150) { lastMillis = now; state = 2; } break;
-            case 2: digitalWrite(HEARTBEAT_LED, HIGH);
-                    if (now - lastMillis >= 150) { lastMillis = now; state = 3; } break;
-            case 3: digitalWrite(HEARTBEAT_LED, LOW);
-                    if (now - lastMillis >= 1500) { lastMillis = now; state = 0; } break;
-        }
+    // Heartbeat LED: double pulse every ~2 seconds
+    switch (state) {
+        case 0: digitalWrite(HEARTBEAT_LED, HIGH);
+                if (now - lastMillis >= 150) { lastMillis = now; state = 1; }
+                break;
+        case 1: digitalWrite(HEARTBEAT_LED, LOW);
+                if (now - lastMillis >= 150) { lastMillis = now; state = 2; }
+                break;
+        case 2: digitalWrite(HEARTBEAT_LED, HIGH);
+                if (now - lastMillis >= 150) { lastMillis = now; state = 3; }
+                break;
+        case 3: digitalWrite(HEARTBEAT_LED, LOW);
+                if (now - lastMillis >= 1500) { lastMillis = now; state = 0; }
+                break;
     }
 }
-
