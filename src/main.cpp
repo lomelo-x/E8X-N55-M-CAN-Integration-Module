@@ -22,18 +22,21 @@ void setup(void) {
 
     Serial.println("E8X-M-CAN Initializing...");
     can1.begin();
-    can1.setBaudRate(125000);  // Set to your K-CAN baud rate if needed
-    can1.setTX(DEF);           // Use default TX pin for KCAN
-    can1.setRX(DEF);           // Use default RX pin for KCAN
+    can1.setBaudRate(500000);  // PT-CAN is actually on CAN1
+    can1.setTX(DEF);           // Use default TX pin for PTCAN
+    can1.setRX(DEF);           // Use default RX pin for PTCAN
     can2.begin();
-    can2.setBaudRate(125000);  // Set to your PT-CAN baud rate if needed
-    can2.setTX(DEF);           // Use default TX pin for PTCAN
-    can2.setRX(DEF);           // Use default RX pin for PTCAN
+    can2.setBaudRate(100000);  // K-CAN is actually on CAN2
+    can2.setTX(DEF);           // Use default TX pin for KCAN
+    can2.setRX(DEF);           // Use default RX pin for KCAN
     delay(100);
+    Serial.println("CAN Bus Monitor Starting...");
+    Serial.println("Waiting for CAN messages...");
+
     Serial.println("Gauge Sweep Initializing...");
     initializeGaugeMessages();
     Serial.println("Gauge Sweep Starting...");
-    performGaugeSweep();
+    // performGaugeSweep();
     Serial.println("Gauge Sweep Completed");
 }
 
@@ -43,6 +46,34 @@ void loop() {
     static bool ledState = false;
     uint32_t now = millis();
 
+    // Check for CAN messages on both buses
+    CAN_message_t rx_msg;
+    
+    // Check CAN1 (K-CAN)
+    while (can1.read(rx_msg)) {
+        Serial.print("K-CAN ID: 0x");
+        Serial.print(rx_msg.id, HEX);
+        Serial.print(" Data: ");
+        for (int i = 0; i < rx_msg.len; i++) {
+            Serial.print(rx_msg.buf[i], HEX);
+            Serial.print(" ");
+        }
+        Serial.println();
+    }
+
+    // Check CAN2 (PT-CAN)
+    while (can2.read(rx_msg)) {
+        Serial.print("PT-CAN ID: 0x");
+        Serial.print(rx_msg.id, HEX);
+        Serial.print(" Data: ");
+        for (int i = 0; i < rx_msg.len; i++) {
+            Serial.print(rx_msg.buf[i], HEX);
+            Serial.print(" ");
+        }
+        Serial.println();
+    }
+
+    // Heartbeat LED logic
     if (rapid_blink) {
         // Rapid blink: 50ms on, 50ms off
         if (now - lastMillis >= 50) {
@@ -64,3 +95,4 @@ void loop() {
         }
     }
 }
+

@@ -3,7 +3,9 @@
 
 #include <FlexCAN_T4.h>
 
-// Extern for rapid_blink flag
+// Extern for CAN objects and flags
+extern FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> can2;
+extern CAN_message_t msg;
 extern bool rapid_blink;
 
 // Function declarations
