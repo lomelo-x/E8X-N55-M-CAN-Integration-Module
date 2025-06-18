@@ -42,21 +42,111 @@ void sendGaugeJob(uint8_t jobCode, uint8_t arg1, uint8_t arg2) {
     delay(50); // slight delay between jobs
 }
 
+void sendGaugeRelease(uint8_t jobCode) {
+    CAN_message_t release;
+    release.id = 0x6F1;
+    release.len = 8;
+    release.flags.extended = 0;
+    release.flags.remote = 0;
+    release.flags.overrun = 0;
+    release.flags.reserved = 0;
+
+    // Format: 60 03 30 [jobCode] 00 00 00 00
+    release.buf[0] = 0x60;
+    release.buf[1] = 0x03;
+    release.buf[2] = 0x30;
+    release.buf[3] = jobCode;
+    release.buf[4] = 0x00;
+    release.buf[5] = 0x00;
+    release.buf[6] = 0x00;
+    release.buf[7] = 0x00;
+
+    if (!can2.write(release)) {
+        Serial.print("Failed to send release for job 0x");
+        Serial.println(jobCode, HEX);
+    }
+    delay(50); // slight delay between jobs
+}
+
 void performGaugeSweep() {
     Serial.println("Starting gauge sweep...");
     rapid_blink = true;
 
-    // Speedo: jobCode 0x20, args 0x12 0x11
+    // Step 1: Sweep to maximum values
+    Serial.println("Raising needles to maximum...");
+    
+    // Speedo: jobCode 0x20, args 0x12 0x11 (325 km/h)
     sendGaugeJob(0x20, 0x12, 0x11);
-
-    // Tach: jobCode 0x21, args 0x12 0x3D
+    delay(100);
+    
+    // Tach: jobCode 0x21, args 0x12 0x3D (8000 RPM)
     sendGaugeJob(0x21, 0x12, 0x3D);
-
-    // Fuel: jobCode 0x22, args 0x07 0x4E
+    delay(100);
+    
+    // Fuel: jobCode 0x22, args 0x07 0x4E (100%)
     sendGaugeJob(0x22, 0x07, 0x4E);
-
-    // Oil: jobCode 0x23, args 0x07 0x12
+    delay(100);
+    
+    // Oil: jobCode 0x23, args 0x07 0x12 (150°C)
     sendGaugeJob(0x23, 0x07, 0x12);
+    delay(300);
+
+    // Step 2: Hold at maximum
+    Serial.println("Holding at maximum...");
+    delay(500);
+
+    // Step 3: Sweep to minimum values
+    Serial.println("Lowering needles to minimum...");
+    
+    // Tach: jobCode 0x21, args 0x00 0x00 (0 RPM)
+    sendGaugeJob(0x21, 0x00, 0x00);
+    delay(100);
+    
+    // Speedo: jobCode 0x20, args 0x00 0x00 (0 km/h)
+    sendGaugeJob(0x20, 0x00, 0x00);
+    delay(100);
+    
+    // Oil: jobCode 0x23, args 0x00 0x00 (0°C)
+    sendGaugeJob(0x23, 0x00, 0x00);
+    delay(100);
+    
+    // Fuel: jobCode 0x22, args 0x00 0x00 (0%)
+    sendGaugeJob(0x22, 0x00, 0x00);
+    delay(300);
+
+    // Step 4: Hold at minimum
+    Serial.println("Holding at minimum...");
+    delay(500);
+
+    // Step 5: Release control back to cluster
+    Serial.println("Releasing control back to cluster...");
+    
+    // Release commands use jobCode 0x03 instead of 0x05
+    // Speedo release: 60 03 30 20 00 00 00 00
+    sendGaugeRelease(0x20);
+    delay(100);
+    
+    // Tach release: 60 03 30 21 00 00 00 00
+    sendGaugeRelease(0x21);
+    delay(100);
+    
+    // Fuel release: 60 03 30 22 00 00 00 00
+    sendGaugeRelease(0x22);
+    delay(100);
+    
+    // Oil release: 60 03 30 23 00 00 00 00
+    sendGaugeRelease(0x23);
+    delay(100);
+
+    // Send release commands again to ensure proper operation
+    delay(500);
+    sendGaugeRelease(0x21);
+    delay(100);
+    sendGaugeRelease(0x20);
+    delay(100);
+    sendGaugeRelease(0x23);
+    delay(100);
+    sendGaugeRelease(0x22);
 
     rapid_blink = false;
     Serial.println("Gauge sweep completed");

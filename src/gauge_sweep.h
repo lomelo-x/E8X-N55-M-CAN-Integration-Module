@@ -10,6 +10,8 @@ extern bool rapid_blink;
 
 // Function declarations
 void initializeGaugeMessages();
+void sendGaugeJob(uint8_t jobCode, uint8_t arg1, uint8_t arg2);
+void sendGaugeRelease(uint8_t jobCode);
 void performGaugeSweep();
 
 #endif  // GAUGE_SWEEP_H

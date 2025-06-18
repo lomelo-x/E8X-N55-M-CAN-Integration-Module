@@ -33,11 +33,16 @@ bool checkIgnitionOn(const CAN_message_t &m, uint8_t &lastBuf1) {
         Serial.print(" lastBuf1: 0x");
         Serial.println(lastBuf1, HEX);
 
-        // Trigger when buf[1] changes TO 0x42
+        // Trigger when buf[1] changes TO 0x42 (ignition ON)
         if (m.buf[1] == 0x42 && lastBuf1 != 0x42) {
             Serial.println("Ignition ON detected by transition!");
             lastBuf1 = m.buf[1];
             return true;
+        }
+        // Reset flag when buf[1] changes FROM 0x42 (ignition OFF)
+        else if (m.buf[1] != 0x42 && lastBuf1 == 0x42) {
+            Serial.println("Ignition OFF detected by transition!");
+            gaugeSweepDone = false; // Reset flag to allow sweep on next ignition
         }
         lastBuf1 = m.buf[1];
     }
@@ -115,19 +120,25 @@ void loop() {
         }
     }
 
-    // Heartbeat LED: double pulse every ~2 seconds
-    switch (state) {
-        case 0: digitalWrite(HEARTBEAT_LED, HIGH);
-                if (now - lastMillis >= 150) { lastMillis = now; state = 1; }
-                break;
-        case 1: digitalWrite(HEARTBEAT_LED, LOW);
-                if (now - lastMillis >= 150) { lastMillis = now; state = 2; }
-                break;
-        case 2: digitalWrite(HEARTBEAT_LED, HIGH);
-                if (now - lastMillis >= 150) { lastMillis = now; state = 3; }
-                break;
-        case 3: digitalWrite(HEARTBEAT_LED, LOW);
-                if (now - lastMillis >= 1500) { lastMillis = now; state = 0; }
-                break;
+    // Heartbeat LED: rapid blink during sweep, double pulse otherwise
+    if (rapid_blink) {
+        // Rapid blink during gauge sweep
+        digitalWrite(HEARTBEAT_LED, (now / 100) % 2); // Blink every 100ms
+    } else {
+        // Normal double pulse every ~2 seconds
+        switch (state) {
+            case 0: digitalWrite(HEARTBEAT_LED, HIGH);
+                    if (now - lastMillis >= 150) { lastMillis = now; state = 1; }
+                    break;
+            case 1: digitalWrite(HEARTBEAT_LED, LOW);
+                    if (now - lastMillis >= 150) { lastMillis = now; state = 2; }
+                    break;
+            case 2: digitalWrite(HEARTBEAT_LED, HIGH);
+                    if (now - lastMillis >= 150) { lastMillis = now; state = 3; }
+                    break;
+            case 3: digitalWrite(HEARTBEAT_LED, LOW);
+                    if (now - lastMillis >= 1500) { lastMillis = now; state = 0; }
+                    break;
+        }
     }
 }
