@@ -1,5 +1,6 @@
 #include <FlexCAN_T4.h>
 #include "can_core.h"
+#include "gauge_sweep.h"
 
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> can1;
 FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> can2;
@@ -15,130 +16,10 @@ bool engineRunning = false;
 uint16_t lastRPM = 0;
 uint32_t lastRPMTime = 0;
 
-// Simple gauge sweep function
+// Simple gauge sweep function wrapper
 void testGaugeSweep() {
     Serial.println("=== testGaugeSweep() STARTING ===");
-    Serial.println("Starting gauge sweep...");
-    
-    rapid_blink = true;
-    Serial.println("Rapid blink enabled");
-
-    // Step 1: Raise needles to maximum
-    Serial.println("Raising needles to maximum...");
-    
-    // Speedo to max (0x20)
-    CAN_message_t speedo_max;
-    speedo_max.id = 0x6F1;
-    speedo_max.len = 8;
-    speedo_max.buf[0] = 0x60; speedo_max.buf[1] = 0x05; speedo_max.buf[2] = 0x30;
-    speedo_max.buf[3] = 0x20; speedo_max.buf[4] = 0x06; speedo_max.buf[5] = 0x12;
-    speedo_max.buf[6] = 0x11; speedo_max.buf[7] = 0x00;
-    can2.write(speedo_max);
-    delay(100);
-    
-    // Tach to max (0x21)
-    CAN_message_t tach_max;
-    tach_max.id = 0x6F1;
-    tach_max.len = 8;
-    tach_max.buf[0] = 0x60; tach_max.buf[1] = 0x05; tach_max.buf[2] = 0x30;
-    tach_max.buf[3] = 0x21; tach_max.buf[4] = 0x06; tach_max.buf[5] = 0x12;
-    tach_max.buf[6] = 0x3D; tach_max.buf[7] = 0x00;
-    can2.write(tach_max);
-    delay(100);
-    
-    // Oil to max (0x23)
-    CAN_message_t oil_max;
-    oil_max.id = 0x6F1;
-    oil_max.len = 8;
-    oil_max.buf[0] = 0x60; oil_max.buf[1] = 0x05; oil_max.buf[2] = 0x30;
-    oil_max.buf[3] = 0x23; oil_max.buf[4] = 0x06; oil_max.buf[5] = 0x07;
-    oil_max.buf[6] = 0x12; oil_max.buf[7] = 0x00;
-    can2.write(oil_max);
-    delay(300);
-    
-    Serial.println("Needles raised to maximum");
-    
-    // Step 2: Hold at maximum
-    Serial.println("Holding at maximum...");
-    delay(500);
-    
-    // Step 3: Lower needles to minimum
-    Serial.println("Lowering needles to minimum...");
-    
-    // Tach to min (0x21)
-    CAN_message_t tach_min;
-    tach_min.id = 0x6F1;
-    tach_min.len = 8;
-    tach_min.buf[0] = 0x60; tach_min.buf[1] = 0x05; tach_min.buf[2] = 0x30;
-    tach_min.buf[3] = 0x21; tach_min.buf[4] = 0x06; tach_min.buf[5] = 0x00;
-    tach_min.buf[6] = 0x00; tach_min.buf[7] = 0x00;
-    can2.write(tach_min);
-    delay(100);
-    
-    // Speedo to min (0x20)
-    CAN_message_t speedo_min;
-    speedo_min.id = 0x6F1;
-    speedo_min.len = 8;
-    speedo_min.buf[0] = 0x60; speedo_min.buf[1] = 0x05; speedo_min.buf[2] = 0x30;
-    speedo_min.buf[3] = 0x20; speedo_min.buf[4] = 0x06; speedo_min.buf[5] = 0x00;
-    speedo_min.buf[6] = 0x00; speedo_min.buf[7] = 0x00;
-    can2.write(speedo_min);
-    delay(100);
-    
-    // Oil to min (0x23)
-    CAN_message_t oil_min;
-    oil_min.id = 0x6F1;
-    oil_min.len = 8;
-    oil_min.buf[0] = 0x60; oil_min.buf[1] = 0x05; oil_min.buf[2] = 0x30;
-    oil_min.buf[3] = 0x23; oil_min.buf[4] = 0x06; oil_min.buf[5] = 0x00;
-    oil_min.buf[6] = 0x00; oil_min.buf[7] = 0x00;
-    can2.write(oil_min);
-    delay(300);
-    
-    Serial.println("Needles lowered to minimum");
-    
-    // Step 4: Hold at minimum
-    Serial.println("Holding at minimum...");
-    delay(500);
-    
-    // Step 5: Release control back to cluster
-    Serial.println("Releasing control back to cluster...");
-    
-    // Release speedo (0x20)
-    CAN_message_t speedo_release;
-    speedo_release.id = 0x6F1;
-    speedo_release.len = 8;
-    speedo_release.buf[0] = 0x60; speedo_release.buf[1] = 0x03; speedo_release.buf[2] = 0x30;
-    speedo_release.buf[3] = 0x20; speedo_release.buf[4] = 0x00; speedo_release.buf[5] = 0x00;
-    speedo_release.buf[6] = 0x00; speedo_release.buf[7] = 0x00;
-    can2.write(speedo_release);
-    delay(100);
-    
-    // Release tach (0x21)
-    CAN_message_t tach_release;
-    tach_release.id = 0x6F1;
-    tach_release.len = 8;
-    tach_release.buf[0] = 0x60; tach_release.buf[1] = 0x03; tach_release.buf[2] = 0x30;
-    tach_release.buf[3] = 0x21; tach_release.buf[4] = 0x00; tach_release.buf[5] = 0x00;
-    tach_release.buf[6] = 0x00; tach_release.buf[7] = 0x00;
-    can2.write(tach_release);
-    delay(100);
-    
-    // Release oil (0x23)
-    CAN_message_t oil_release;
-    oil_release.id = 0x6F1;
-    oil_release.len = 8;
-    oil_release.buf[0] = 0x60; oil_release.buf[1] = 0x03; oil_release.buf[2] = 0x30;
-    oil_release.buf[3] = 0x23; oil_release.buf[4] = 0x00; oil_release.buf[5] = 0x00;
-    oil_release.buf[6] = 0x00; oil_release.buf[7] = 0x00;
-    can2.write(oil_release);
-    delay(100);
-    
-    Serial.println("Control released back to cluster");
-    
-    rapid_blink = false;
-    Serial.println("Rapid blink disabled");
-    Serial.println("Gauge sweep completed");
+    performGaugeSweep();
     Serial.println("=== testGaugeSweep() COMPLETED ===");
 }
 
@@ -170,11 +51,24 @@ void setup(void) {
     // Test CAN initialization
     Serial.println("Initializing CAN1...");
     can1.begin();
+    can1.setBaudRate(100000); // 100kbps for K-CAN
+    can1.setTX(22); // K-CAN TX pin
+    can1.setRX(23); // K-CAN RX pin
+    can1.enableFIFO();
     Serial.println("CAN1 initialized");
     
     Serial.println("Initializing CAN2...");
     can2.begin();
+    can2.setBaudRate(500000); // 500kbps for PT-CAN
+    can2.setTX(0); // PT-CAN TX pin
+    can2.setRX(1); // PT-CAN RX pin
+    can2.enableFIFO();
     Serial.println("CAN2 initialized");
+    
+    // Initialize gauge sweep functionality
+    Serial.println("Initializing gauge sweep...");
+    initializeGaugeMessages();
+    Serial.println("Gauge sweep initialized");
     
     Serial.println("Testing gauge sweep on startup...");
     

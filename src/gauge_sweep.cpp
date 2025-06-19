@@ -35,9 +35,18 @@ void sendGaugeJob(uint8_t jobCode, uint8_t arg1, uint8_t arg2) {
     sweep.buf[6] = arg2;
     sweep.buf[7] = 0x00;
 
+    Serial.print("Sending gauge job 0x");
+    Serial.print(jobCode, HEX);
+    Serial.print(" with args 0x");
+    Serial.print(arg1, HEX);
+    Serial.print(" 0x");
+    Serial.println(arg2, HEX);
+
     if (!can2.write(sweep)) {
         Serial.print("Failed to send job 0x");
         Serial.println(jobCode, HEX);
+    } else {
+        Serial.println("CAN message sent successfully");
     }
     delay(50); // slight delay between jobs
 }
@@ -61,9 +70,14 @@ void sendGaugeRelease(uint8_t jobCode) {
     release.buf[6] = 0x00;
     release.buf[7] = 0x00;
 
+    Serial.print("Sending gauge release for 0x");
+    Serial.println(jobCode, HEX);
+
     if (!can2.write(release)) {
         Serial.print("Failed to send release for job 0x");
         Serial.println(jobCode, HEX);
+    } else {
+        Serial.println("Release message sent successfully");
     }
     delay(50); // slight delay between jobs
 }
