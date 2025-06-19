@@ -70,14 +70,8 @@ void setup(void) {
     initializeGaugeMessages();
     Serial.println("Gauge sweep initialized");
     
-    Serial.println("Testing gauge sweep on startup...");
-    
-    // Run gauge sweep automatically on startup
-    Serial.println("About to call testGaugeSweep()...");
-    testGaugeSweep();
-    Serial.println("testGaugeSweep() completed");
-    
     Serial.println("System ready! Type 'ping' to test communication.");
+    Serial.println("Waiting for ignition and engine start...");
     Serial.println("=== SETUP COMPLETED ===");
 }
 
@@ -85,7 +79,112 @@ void loop() {
     static uint32_t lastMillis = 0;
     static uint8_t state = 0;
     static uint32_t lastTestTime = 0;
+    static bool ignitionOn = false;
+    static bool engineRunning = false;
+    static bool sweepTriggered = false;
     uint32_t now = millis();
+
+    // Process CAN messages for ignition detection
+    CAN_message_t canMsg;
+    
+    // Check CAN1 (K-CAN) for ignition and engine messages
+    if (can1.read(canMsg)) {
+        // Debug: Print all CAN messages for troubleshooting
+        Serial.print("CAN1 ID: 0x");
+        Serial.print(canMsg.id, HEX);
+        Serial.print(" Data: ");
+        for (int i = 0; i < canMsg.len; i++) {
+            if (canMsg.buf[i] < 0x10) Serial.print("0");
+            Serial.print(canMsg.buf[i], HEX);
+            Serial.print(" ");
+        }
+        Serial.println();
+        
+        switch (canMsg.id) {
+            case 0x480: // Terminal status
+                if (canMsg.len >= 1) {
+                    // Correct ignition detection: bits 2-3 of buf[0]
+                    // 0 = IGK_OFF, 1 = IGK_ON, 2 = INVALID_SIGNAL
+                    uint8_t ignition_bits = (canMsg.buf[0] & 0b1100) >> 2;
+                    bool newIgnitionState = (ignition_bits == 1);
+                    
+                    Serial.print("0x480 ignition bits: ");
+                    Serial.print(ignition_bits);
+                    Serial.print(" (");
+                    Serial.print(newIgnitionState ? "ON" : "OFF");
+                    Serial.println(")");
+                    
+                    if (newIgnitionState && !ignitionOn) {
+                        Serial.println("Ignition ON detected!");
+                        ignitionOn = true;
+                        sweepTriggered = false; // Reset sweep flag for new ignition cycle
+                    } else if (!newIgnitionState && ignitionOn) {
+                        Serial.println("Ignition OFF detected!");
+                        ignitionOn = false;
+                        engineRunning = false;
+                        sweepTriggered = false;
+                    }
+                }
+                break;
+                
+            case 0x130: // Alternative terminal status
+                if (canMsg.len >= 1) {
+                    // Check for ignition in 0x130 message
+                    uint8_t ignition_bits = (canMsg.buf[0] & 0b1100) >> 2;
+                    bool newIgnitionState = (ignition_bits == 1);
+                    
+                    Serial.print("0x130 ignition bits: ");
+                    Serial.print(ignition_bits);
+                    Serial.print(" (");
+                    Serial.print(newIgnitionState ? "ON" : "OFF");
+                    Serial.println(")");
+                    
+                    if (newIgnitionState && !ignitionOn) {
+                        Serial.println("Ignition ON detected from 0x130!");
+                        ignitionOn = true;
+                        sweepTriggered = false;
+                    } else if (!newIgnitionState && ignitionOn) {
+                        Serial.println("Ignition OFF detected from 0x130!");
+                        ignitionOn = false;
+                        engineRunning = false;
+                        sweepTriggered = false;
+                    }
+                }
+                break;
+                
+            case 0x3AF: // PDC bus states (might contain ignition info)
+                Serial.println("0x3AF PDC bus states message received");
+                break;
+                
+            case 0xAA: // Engine RPM and status
+                if (canMsg.len >= 6) {
+                    uint16_t rpm = ((canMsg.buf[2] << 8) | canMsg.buf[3]) * 4; // RPM calculation
+                    bool newEngineState = (rpm > 200); // Engine running if RPM > 200
+                    
+                    Serial.print("0xAA RPM: ");
+                    Serial.print(rpm);
+                    Serial.print(" (");
+                    Serial.print(newEngineState ? "RUNNING" : "STOPPED");
+                    Serial.println(")");
+                    
+                    if (newEngineState && !engineRunning && ignitionOn && !sweepTriggered) {
+                        Serial.println("Engine start detected! Triggering gauge sweep...");
+                        engineRunning = true;
+                        sweepTriggered = true;
+                        testGaugeSweep();
+                    } else if (!newEngineState && engineRunning) {
+                        Serial.println("Engine stopped!");
+                        engineRunning = false;
+                    }
+                }
+                break;
+        }
+    }
+    
+    // Check CAN2 (PT-CAN) for additional engine messages
+    if (can2.read(canMsg)) {
+        // Add any PT-CAN message processing here if needed
+    }
 
     // Automatic test every 10 seconds
     if (now - lastTestTime > 10000) {
@@ -106,6 +205,12 @@ void loop() {
         } else if (cmd == "status") {
             Serial.print("gaugeSweepDone: ");
             Serial.println(gaugeSweepDone ? "true" : "false");
+            Serial.print("Ignition: ");
+            Serial.println(ignitionOn ? "ON" : "OFF");
+            Serial.print("Engine: ");
+            Serial.println(engineRunning ? "RUNNING" : "STOPPED");
+            Serial.print("Sweep triggered: ");
+            Serial.println(sweepTriggered ? "YES" : "NO");
         } else if (cmd == "restart") {
             Serial.println("Restarting Teensy...");
             delay(1000);
@@ -120,8 +225,16 @@ void loop() {
             Serial.println("Testing gauge sweep...");
             testGaugeSweep();
             gaugeSweepDone = true;
+        } else if (cmd == "trigger") {
+            Serial.println("Manually triggering gauge sweep...");
+            sweepTriggered = false; // Reset flag to allow manual trigger
+            testGaugeSweep();
+            gaugeSweepDone = true;
+        } else if (cmd == "debug") {
+            Serial.println("Enabling CAN message debug output...");
+            // This will show all CAN messages in the main loop
         } else {
-            Serial.println("Unknown command. Try: ping, status, restart, test, sweep");
+            Serial.println("Unknown command. Try: ping, status, restart, test, sweep, trigger, debug");
         }
     }
 
